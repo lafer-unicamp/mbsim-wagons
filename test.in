@@ -1,0 +1,14 @@
+%======================== OVERALL CONTROLS ===================================%
+SIMULATION_TIME=10.0
+SYSTEM_NAME=Wagon
+%======================== MOTION INPUT =======================================%
+AMPLITUDE=0.003
+ANGULAR_VELOCITY=160.0
+MOVEMENT_DELAY=0.2
+%======================== WAGON GEOMETRIC DATA ===============================%
+CAR_WHEEL_BASE=12.3
+TRUCK_SEMI_WHEEL_BASE=1.575
+BOX_MASS=65134.0
+BOX_Ixx=52800.0
+BOX_Iyy=1284000.0
+BOX_Izz=1290000.0

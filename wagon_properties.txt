@@ -1,0 +1,16 @@
+Fluid density: 780
+Tank length: 16.6
+Tank height: 2.47
+Tank width: 2.47
+Filled volume: 100%
+Total mass of fluid: 78994.5
+Aspect ratio: 0.148795
+m0: 59741.2
+z0: -1.19098
+k0: 48373.8
+m1: 4494.17
+z1: -0.896602
+k1: 22174.2
+M: 14759.1
+Z: 5.09383
+Solid mass inertia: 1.38283e+06

@@ -1,0 +1,349 @@
+/*
+    System: instances a friction wedge 2D dynamical system
+    Copyright (C) 2013  Leonardo Baruffaldi leobart@fem.unicamp.br
+
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
+
+    This library is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+*/
+
+#ifndef PI
+#define PI 3.1416
+#endif
+
+#include <mbsim/dynamic_system.h>
+
+#include "system.h"
+#include "mbsim/rigid_body.h"
+#include "mbsim/spring_damper.h"
+#include "mbsim/environment.h"
+#include "mbsim/contours/sphere.h"
+#include "mbsim/contours/plane.h"
+#include "mbsim/contours/edge.h"
+#include <mbsim/contours/compound_contour.h>
+#include "mbsim/contact.h"
+#include "mbsim/constitutive_laws.h"
+
+#ifdef HAVE_OPENMBVCPPINTERFACE
+#include "openmbvcppinterface/coilspring.h"
+#include "openmbvcppinterface/cuboid.h"
+#include "openmbvcppinterface/extrusion.h"
+#include "openmbvcppinterface/sphere.h"
+#endif
+
+#include <iostream>
+
+using namespace MBSim;
+using namespace fmatvec;
+using namespace std;
+
+
+System::System(const std::string &projectName) : DynamicSystemSolver(projectName)
+{
+  /// ---------------------------- SYSTEM PARAMETERS --------------------------
+  /// -------------------------------------------------------------------------
+  
+  double angleBolster = (37.5) *M_PI/180. + M_PI; // [rad]
+  double angleSideframe = (4.0) *M_PI/180.; // [rad]
+  double bolsterWidth = 0.41; // taken at the widest part [m]
+  double bolsterHeight = .19; // [m]
+  double bolsterMass = 6120.; // [kg]
+  double frictionCoefficient = 0.3; // [-]
+  double wedgeMass = 12; // [kg]
+  double wedgeHeight = 0.2; // [m]
+  double wedgeDepth = 0.10; // [m]
+  double wedgeSpringStiffness = 240000; // [N/m]
+  double sideFrameHeight = .495; // [m]
+  double sideFrameWidth = .45; // [m]
+  double bolsterSpringStiffness = 7 * 550000; // [N/m]
+  double t1,t2,t3 = 0; // temporary storage
+  
+  //acceleration of gravity
+  MBSimEnvironment::getInstance()->setAccelerationOfGravity(Vec("[0.;-9.810;0]"));
+  
+  /// --------------------------- SIDEFRAME MOVEMENT PARAMETERS ---------------
+  /// -------------------------------------------------------------------------
+  
+  double amplitude = 0.001; // movement amplitude [m]
+  double angSpeed = M_PI; // movement angular speed [rad/s]
+  double t0 = 0.3; // movement delay to enter [s]
+  
+  /// ---------------------------- DEFINITION OF BODIES -----------------------
+  /// -------------------------------------------------------------------------
+  
+  Wedge *wedgeL = new Wedge("Wedge Left");
+  Wedge *wedgeR = new Wedge("Wedge Right");
+  RigidBody *bolster1 = new RigidBody("Bolster");
+  RigidBody *sideFrame = new RigidBody("Side frame");
+  
+  this->addObject(wedgeL);
+  this->addObject(wedgeR);
+  this->addObject(bolster1);
+  this->addObject(sideFrame);
+  
+  /// ------------------------------ FRAMES -----------------------------------
+  /// ------------ Frames on environment --------------------------------------
+  Vec pos(3,INIT,0.);
+  this->addFrame(new FixedRelativeFrame("L",Vec("[0.;0.;0.]"),SqrMat(3,EYE)));
+  this->getFrame("L")->enableOpenMBV();
+  /// ------------ Frames on the wedge ----------------------------------------
+  pos(0) = -.152;
+  pos(1) = 0.0;
+  pos(2) = 0.0;
+  this->addFrame(new FixedRelativeFrame("WL",pos,SqrMat(3,EYE)));
+  sideFrame->addFrame(new FixedRelativeFrame("WL",pos,SqrMat(3,EYE)));
+  pos(0) = -pos(0);
+  this->addFrame(new FixedRelativeFrame("WR",pos,SqrMat(3,EYE)));
+  sideFrame->addFrame(new FixedRelativeFrame("WR",pos,SqrMat(3,EYE)));
+  /// ------------ Frames on the bolster --------------------------------------
+  pos(0) = 0;
+  pos(1) = 0.145;
+  pos(2) = 0.0;
+  this->addFrame(new FixedRelativeFrame("B",pos,SqrMat(3,EYE)));
+  sideFrame->addFrame(new FixedRelativeFrame("B",pos,SqrMat(3,EYE)));
+  this->addFrame(new FixedRelativeFrame("BS",Vec("[0.0;-.2;0.0]"),SqrMat(3,EYE),this->getFrame("B")));
+  sideFrame->addFrame(new FixedRelativeFrame("BS",Vec("[0.0;-.2;0.0]"),SqrMat(3,EYE),sideFrame->getFrame("B")));
+  //
+  this->addFrame(new FixedRelativeFrame("M",Vec("[0.0;-.200;0]"),SqrMat(3,EYE),this->getFrame("WL")));
+  this->addFrame(new FixedRelativeFrame("N",Vec("[0.0;-.200;0]"),SqrMat(3,EYE),this->getFrame("WR")));
+  sideFrame->addFrame(new FixedRelativeFrame("M",Vec("[0.0;-.200;0]"),SqrMat(3,EYE),sideFrame->getFrame("WL")));
+  sideFrame->addFrame(new FixedRelativeFrame("N",Vec("[0.0;-.200;0]"),SqrMat(3,EYE),sideFrame->getFrame("WR")));
+  
+  /// ---------------- DEFINITION OF THE WEDGES -------------------------------
+  wedgeL->setMass(wedgeMass);
+  Vec wedgeAngles(2,INIT,0.0);
+  wedgeAngles(0) = angleBolster;
+  wedgeAngles(1) = angleSideframe;
+  wedgeL->setAngles(wedgeAngles);
+  wedgeL->setHeight(wedgeHeight);
+  wedgeL->setDepth(wedgeDepth);
+  wedgeL->setInertiaTensor(SymMat(3,EYE));
+  wedgeL->buildContour();
+  wedgeL->setFrameOfReference(getFrame("WL"));
+  wedgeL->setFrameForKinematics(wedgeL->getFrame("C"));
+  wedgeL->getFrame("C")->enableOpenMBV();
+  wedgeL->setTranslation(new LinearTranslation(Mat("[1,0;0,1;0,0]")));
+  wedgeL->setRotation(new RotationAboutZAxis());
+  wedgeL->enableOpenMBV(true);
+  
+  wedgeR->setMass(wedgeMass);
+  wedgeAngles(0) = angleSideframe;
+  wedgeAngles(1) = angleBolster;
+  wedgeR->setAngles(wedgeAngles);
+  wedgeR->setHeight(wedgeHeight);
+  wedgeR->setDepth(wedgeDepth);
+  wedgeR->setInertiaTensor(SymMat(3,EYE));
+  wedgeR->buildContour();
+  wedgeR->setFrameOfReference(getFrame("WR"));
+  wedgeR->setFrameForKinematics(wedgeR->getFrame("C"));
+  wedgeR->getFrame("C")->enableOpenMBV();
+  wedgeR->setTranslation(new LinearTranslation(Mat("[1,0;0,1;0,0]")));
+  wedgeR->setRotation(new RotationAboutZAxis());
+  wedgeR->enableOpenMBV(true);
+
+  
+  /// ---------------- DEFINITION OF THE BOLSTER ------------------------------  
+  bolster1->setMass(bolsterMass);
+  bolster1->setInertiaTensor(SymMat(3,EYE,230e6));
+  bolster1->setFrameOfReference(this->getFrame("B"));
+  bolster1->setFrameForKinematics(bolster1->getFrameC());
+  bolster1->getFrameC()->enableOpenMBV();
+  bolster1->setTranslation(new LinearTranslation(Mat("[1,0;0,1;0,0]")));
+  bolster1->setRotation(new RotationAboutZAxis());
+  
+  // estimation of bolster's center of mass
+  t1 = bolsterWidth/2; /// center of mass x
+  t2 = (2*bolsterWidth-2*bolsterHeight*tan(angleBolster))*
+    bolsterHeight/2; /// bolster frontal area
+  t3 = (1/2*(bolsterWidth-2*bolsterHeight*tan(angleBolster)) +
+      2/3*(bolsterHeight*tan(angleBolster)))*bolsterHeight / t2;
+  
+  Plane *bolsterL = new Plane("Bolster left");
+  bolsterL->enableOpenMBV();
+  RotationAboutZAxis* tp = new RotationAboutZAxis();
+  Vec* rotvec = new Vec(1,INIT,angleBolster);
+  Vec posi(3,INIT,0.0);
+  posi(0) = -t1;
+  posi(1) = t3;
+  posi(2) = -wedgeDepth/2;
+  bolster1->addContour(bolsterL,posi,tp->operator()(*rotvec,0.0,NULL));
+  delete rotvec;
+  rotvec=0;
+  
+  Plane *bolsterR = new Plane("Bolster right");
+  bolsterR->enableOpenMBV();
+  tp = new RotationAboutZAxis();
+  rotvec = new Vec(1,INIT,-angleBolster+M_PI);
+  posi(0) = t1;
+  posi(1) = t3;
+  posi(2) = -wedgeDepth/2;
+  bolster1->addContour(bolsterR,posi,tp->operator()(*rotvec,0.0,NULL));
+  delete rotvec;
+  rotvec=0;
+  
+  /// ------------------- DEFINITION OF THE SIDEFRAME -------------------------
+  sideFrame->setMass(400);
+  sideFrame->setFrameForKinematics(sideFrame->getFrameC());
+  sideFrame->getFrameC()->enableOpenMBV();
+  SinusoidalMovement* movement = new SinusoidalMovement(angSpeed,amplitude,t0);
+  sideFrame->setTranslation(new SinusoidalMovement::Position(*movement));
+  sideFrame->setGuidingVelocityOfTranslation(new SinusoidalMovement::Velocity(*movement));
+  sideFrame->setDerivativeOfGuidingVelocityOfTranslation(new SinusoidalMovement::Acceleration(*movement));
+  
+  Plane *sideframeL = new Plane("Side frame left");
+  sideframeL->enableOpenMBV();
+  tp = new RotationAboutZAxis();
+  rotvec = new Vec(1,INIT,-angleSideframe);
+  pos(0) = -sideFrameWidth/2;
+  pos(1) = -sideFrameHeight/2;
+  sideFrame->addContour(sideframeL,pos,tp->operator()(*rotvec,0.0,NULL),sideFrame->getFrameC());
+  delete rotvec;
+  delete tp;
+  tp = 0;
+  rotvec=0;
+  
+  Plane *sideframeR = new Plane("Side frame right");
+  sideframeR->enableOpenMBV();
+  tp = new RotationAboutZAxis();
+  rotvec = new Vec(1,INIT,angleSideframe+M_PI);
+  pos(0) = -pos(0);
+  sideFrame->addContour(sideframeR,pos,tp->operator()(*rotvec,0.0,NULL),sideFrame->getFrameC());
+  delete rotvec;
+  rotvec=0;
+  
+  Plane *ground = new Plane("Ground");
+  ground->enableOpenMBV();
+  rotvec = new Vec(1,INIT,0.5*M_PI);
+  pos(0) = 0;
+  sideFrame->addContour(ground,pos,(*tp)(*rotvec,0.0,NULL));
+  delete tp;
+  tp = 0;
+  
+  /// ---------------- DEFINITION OF THE SPRINGS
+  SpringDamper *spring1 = new SpringDamper("S1");
+  spring1->connect(sideFrame->getFrame("M"),wedgeL->getFrame("C"));
+  spring1->setForceFunction(new LinearSpringDamperForce(wedgeSpringStiffness,1.,.22));
+  this->addLink(spring1);
+#ifdef HAVE_OPENMBVCPPINTERFACE
+  OpenMBV::CoilSpring *openMBVSpring1 = new OpenMBV::CoilSpring();
+  openMBVSpring1->setCrossSectionRadius(.005);
+  openMBVSpring1->setNumberOfCoils(5);
+  openMBVSpring1->setSpringRadius(0.01);
+  spring1->setOpenMBVSpring(openMBVSpring1);
+#endif
+  
+  SpringDamper *spring2 = new SpringDamper("S2");
+  spring2->connect(sideFrame->getFrame("N"),wedgeR->getFrame("C"));
+  spring2->setForceFunction(new LinearSpringDamperForce(wedgeSpringStiffness,1.,.22));
+  this->addLink(spring2);
+#ifdef HAVE_OPENMBVCPPINTERFACE
+  OpenMBV::CoilSpring *openMBVSpring2 = new OpenMBV::CoilSpring();
+  openMBVSpring2->setCrossSectionRadius(.005);
+  openMBVSpring2->setNumberOfCoils(5);
+  openMBVSpring2->setSpringRadius(0.01);
+  spring2->setOpenMBVSpring(openMBVSpring2);
+#endif
+  
+  SpringDamper *springBolster = new SpringDamper("Spring bolster");
+  springBolster->connect(sideFrame->getFrame("BS"),bolster1->getFrame("C"));
+  springBolster->setForceFunction(new LinearSpringDamperForce(bolsterSpringStiffness,1.,.21));
+  this->addLink(springBolster);
+#ifdef HAVE_OPENMBVCPPINTERFACE
+  OpenMBV::CoilSpring *openMBVSpringBolster = new OpenMBV::CoilSpring();
+  openMBVSpringBolster->setCrossSectionRadius(.005);
+  openMBVSpringBolster->setNumberOfCoils(5);
+  openMBVSpringBolster->setSpringRadius(0.01);
+  springBolster->setOpenMBVSpring(openMBVSpringBolster);
+#endif
+  
+  /// ------------------------ DEFITION OF THE CONTACTS -----------------------
+  double coefRestitution = 0.05;
+  
+  std::vector<Contact*>* contacts1 = new std::vector<Contact*>;
+  int numberOfContacts = wedgeL->getContours().size();
+  contacts1->resize(numberOfContacts);
+  
+  for ( int i = 0; i < numberOfContacts; i++){
+    stringstream s;
+    string cNumber;
+    s << i+1;
+    cNumber = s.str();
+  
+    contacts1->at(i) = new Contact(std::string("WedgeSideframe_Left-") + cNumber);
+    contacts1->at(i)->connect(wedgeL->getContours()[i],sideframeL);
+    contacts1->at(i)->setContactForceLaw(new UnilateralConstraint());
+    contacts1->at(i)->setContactImpactLaw(new UnilateralNewtonImpact(coefRestitution));
+    contacts1->at(i)->setFrictionImpactLaw(new PlanarCoulombImpact(frictionCoefficient));
+    contacts1->at(i)->setFrictionForceLaw(new PlanarCoulombFriction(frictionCoefficient));
+//     contacts1->at(i)->enableOpenMBVContactPoints();
+    this->addLink(contacts1->at(i));
+  }
+  
+  std::vector<Contact*>* contacts2 = new std::vector<Contact*>;
+  contacts2->resize(numberOfContacts);
+  
+  for ( int i = 0; i < numberOfContacts; i++){
+    stringstream s;
+    string cNumber;
+    s << i+1;
+    cNumber = s.str();
+  
+    contacts2->at(i) = new Contact(std::string("WedgeBolster_Left-") + cNumber);
+    contacts2->at(i)->connect(wedgeL->getContours()[i],bolsterL);
+    contacts2->at(i)->setContactForceLaw(new UnilateralConstraint());
+    contacts2->at(i)->setContactImpactLaw(new UnilateralNewtonImpact(coefRestitution));
+    contacts2->at(i)->setFrictionImpactLaw(new PlanarCoulombImpact(frictionCoefficient));
+    contacts2->at(i)->setFrictionForceLaw(new PlanarCoulombFriction(frictionCoefficient));
+//     contacts2->at(i)->enableOpenMBVContactPoints();
+    this->addLink(contacts2->at(i));
+  }
+  
+  std::vector<Contact*>* contacts3 = new std::vector<Contact*>;
+  contacts3->resize(numberOfContacts);
+  
+  for ( int i = 0; i < numberOfContacts; i++){
+    stringstream s;
+    string cNumber;
+    s << i+1;
+    cNumber = s.str();
+  
+    contacts3->at(i) = new Contact(std::string("WedgeBolster_Right-") + cNumber);
+    contacts3->at(i)->connect(wedgeR->getContours()[i],bolsterR);
+    contacts3->at(i)->setContactForceLaw(new UnilateralConstraint());
+    contacts3->at(i)->setContactImpactLaw(new UnilateralNewtonImpact(coefRestitution));
+    contacts3->at(i)->setFrictionImpactLaw(new PlanarCoulombImpact(frictionCoefficient));
+    contacts3->at(i)->setFrictionForceLaw(new PlanarCoulombFriction(frictionCoefficient));
+//     contacts3->at(i)->enableOpenMBVContactPoints();
+    this->addLink(contacts3->at(i));
+  }
+  
+  std::vector<Contact*>* contacts4 = new std::vector<Contact*>;
+  contacts4->resize(numberOfContacts);
+  
+  for ( int i = 0; i < numberOfContacts; i++){
+    stringstream s;
+    string cNumber;
+    s << i+1;
+    cNumber = s.str();
+  
+    contacts4->at(i) = new Contact(std::string("WedgeSideframe_Right-") + cNumber);
+    contacts4->at(i)->connect(wedgeR->getContours()[i],sideframeR);
+    contacts4->at(i)->setContactForceLaw(new UnilateralConstraint());
+    contacts4->at(i)->setContactImpactLaw(new UnilateralNewtonImpact(coefRestitution));
+    contacts4->at(i)->setFrictionImpactLaw(new PlanarCoulombImpact(frictionCoefficient));
+    contacts4->at(i)->setFrictionForceLaw(new PlanarCoulombFriction(frictionCoefficient));
+//     contacts4->at(i)->enableOpenMBVContactPoints();
+    this->addLink(contacts4->at(i));
+  }
+  
+}
