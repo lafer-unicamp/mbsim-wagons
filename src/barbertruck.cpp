@@ -428,9 +428,8 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 	// Establish contacts
 
 	// contacts between left wedge and sideframe
-	std::vector<Contact*>* contacts1 = new std::vector<Contact*>;
+	Contact *contact;
 	int numberOfContacts = wedge2->getContours().size() / 2;
-	contacts1->resize ( numberOfContacts );
 	std::vector<int> idx(4,0);
 	idx[0] = 0;
 	idx[1] = 1;
@@ -444,20 +443,18 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 		s << i+1;
 		cNumber = s.str();
 
-		contacts1->at ( i ) = new Contact ( std::string ( "Contact_WedgeSideframe_Left-" ) + cNumber );
-		contacts1->at ( i )->connect ( wedge2->getContours() [idx[i]],sideframeL );
-		contacts1->at ( i )->setNormalForceLaw ( new UnilateralConstraint() );
-		contacts1->at ( i )->setNormalImpactLaw ( new UnilateralNewtonImpact ( coefRestitution ) );
-		contacts1->at ( i )->setTangentialImpactLaw ( new PlanarCoulombImpact ( frictionCoefficient ) );
-		contacts1->at ( i )->setTangentialForceLaw ( new PlanarCoulombFriction ( frictionCoefficient ) );
-		this->addLink ( contacts1->at ( i ) );
-		contacts1->at ( i )->setPlotFeature("generalizedForce",enabled);
-		contacts1->at ( i )->setPlotFeature("generalizedRelativePosition",enabled);
+		contact = new Contact ( std::string ( "Contact_WedgeSideframe_Left-" ) + cNumber );
+		contact->connect ( wedge2->getContours() [idx[i]],sideframeL );
+		contact->setNormalForceLaw ( new UnilateralConstraint() );
+		contact->setNormalImpactLaw ( new UnilateralNewtonImpact ( coefRestitution ) );
+		contact->setTangentialImpactLaw ( new PlanarCoulombImpact ( frictionCoefficient ) );
+		contact->setTangentialForceLaw ( new PlanarCoulombFriction ( frictionCoefficient ) );
+		this->addLink ( contact );
+		contact->setPlotFeature("generalizedForce",enabled);
+		contact->setPlotFeature("generalizedRelativePosition",enabled);
 	}
 
 	// contacts between left wedge and bolster
-	std::vector<Contact*>* contacts2 = new std::vector<Contact*>;
-	contacts2->resize ( numberOfContacts );
 	idx[0] = 2;
 	idx[1] = 3;
 	idx[2] = 6;
@@ -470,21 +467,19 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 		s << i+1;
 		cNumber = s.str();
 
-		contacts2->at ( i ) = new Contact ( std::string ( "Contact_WedgeBolster_Left-" ) + cNumber );
-		contacts2->at ( i )->connect ( wedge2->getContours() [idx[i]],bolster->getContour("Contact plane left") );
-		contacts2->at ( i )->setNormalForceLaw ( new UnilateralConstraint() );
-		contacts2->at ( i )->setNormalImpactLaw ( new UnilateralNewtonImpact ( coefRestitution ) );
-		contacts2->at ( i )->setTangentialImpactLaw ( new PlanarCoulombImpact ( frictionCoefficient ) );
-		contacts2->at ( i )->setTangentialForceLaw ( new PlanarCoulombFriction ( frictionCoefficient ) );
-		this->addLink ( contacts2->at ( i ) );
-		contacts2->at ( i )->setPlotFeature("generalizedForce",enabled);
-		contacts2->at ( i )->setPlotFeature("generalizedRelativePosition",enabled);
+		contact = new Contact ( std::string ( "Contact_WedgeBolster_Left-" ) + cNumber );
+		contact->connect ( wedge2->getContours() [idx[i]],bolster->getContour("Contact plane left") );
+		contact->setNormalForceLaw ( new UnilateralConstraint() );
+		contact->setNormalImpactLaw ( new UnilateralNewtonImpact ( coefRestitution ) );
+		contact->setTangentialImpactLaw ( new PlanarCoulombImpact ( frictionCoefficient ) );
+		contact->setTangentialForceLaw ( new PlanarCoulombFriction ( frictionCoefficient ) );
+		this->addLink ( contact );
+		contact->setPlotFeature("generalizedForce",enabled);
+		contact->setPlotFeature("generalizedRelativePosition",enabled);
 
 	}
 
 	// contacts between right wedge and bolster
-	std::vector<Contact*>* contacts3 = new std::vector<Contact*>;
-	contacts3->resize ( numberOfContacts );
 	idx[0] = 0;
 	idx[1] = 1;
 	idx[2] = 4;
@@ -497,27 +492,18 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 		s << i+1;
 		cNumber = s.str();
 
-		contacts3->at ( i ) = new Contact ( std::string ( "Contact_WedgeBolster_Right-" ) + cNumber );
-		contacts3->at ( i )->connect ( wedge1->getContours() [idx[i]],bolster->getContour("Contact plane right") );
-		contacts3->at ( i )->setNormalForceLaw ( new UnilateralConstraint() );
-		contacts3->at ( i )->setNormalImpactLaw ( new UnilateralNewtonImpact ( coefRestitution ) );
-		contacts3->at ( i )->setTangentialImpactLaw ( new PlanarCoulombImpact ( frictionCoefficient ) );
-		contacts3->at ( i )->setTangentialForceLaw ( new PlanarCoulombFriction ( frictionCoefficient ) );
-		this->addLink ( contacts3->at ( i ) );
-		contacts3->at ( i )->setPlotFeature("generalizedForce",enabled);
-		contacts3->at ( i )->setPlotFeature("generalizedRelativePosition",enabled);
-
-		ContactObserver *observer = new ContactObserver("Observer-2-"+cNumber);
-		observer->setContact(contacts3->at(i));
-		observer->enableOpenMBVContactPoints(0.01);
-		//      observer->enableOpenMBVNormalForce();
-		observer->setPlotFeature("generalizedForce",enabled);
-		addObserver(observer);
+		contact= new Contact ( std::string ( "Contact_WedgeBolster_Right-" ) + cNumber );
+		contact->connect ( wedge1->getContours() [idx[i]],bolster->getContour("Contact plane right") );
+		contact->setNormalForceLaw ( new UnilateralConstraint() );
+		contact->setNormalImpactLaw ( new UnilateralNewtonImpact ( coefRestitution ) );
+		contact->setTangentialImpactLaw ( new PlanarCoulombImpact ( frictionCoefficient ) );
+		contact->setTangentialForceLaw ( new PlanarCoulombFriction ( frictionCoefficient ) );
+		this->addLink ( contact);
+		contact->setPlotFeature("generalizedForce",enabled);
+		contact->setPlotFeature("generalizedRelativePosition",enabled);
 	}
 
 	// contacts between right wedge and sideframe
-	std::vector<Contact*>* contacts4 = new std::vector<Contact*>;
-	contacts4->resize ( numberOfContacts );
 	idx[0] = 2;
 	idx[1] = 3;
 	idx[2] = 6;
@@ -530,15 +516,15 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 		s << i+1;
 		cNumber = s.str();
 
-		contacts4->at ( i ) = new Contact ( std::string ( "Contact_WedgeSideframe_Right-" ) + cNumber );
-		contacts4->at ( i )->connect ( wedge1->getContours() [idx[i]],sideframeR );
-		contacts4->at ( i )->setNormalForceLaw ( new UnilateralConstraint() );
-		contacts4->at ( i )->setNormalImpactLaw ( new UnilateralNewtonImpact ( coefRestitution ) );
-		contacts4->at ( i )->setTangentialImpactLaw ( new PlanarCoulombImpact ( frictionCoefficient ) );
-		contacts4->at ( i )->setTangentialForceLaw ( new PlanarCoulombFriction ( frictionCoefficient ) );
-		this->addLink ( contacts4->at ( i ) );
-		contacts4->at ( i )->setPlotFeature("generalizedForce",enabled);
-		contacts4->at ( i )->setPlotFeature("generalizedRelativePosition",enabled);
+		contact = new Contact ( std::string ( "Contact_WedgeSideframe_Right-" ) + cNumber );
+		contact->connect ( wedge1->getContours() [idx[i]],sideframeR );
+		contact->setNormalForceLaw ( new UnilateralConstraint() );
+		contact->setNormalImpactLaw ( new UnilateralNewtonImpact ( coefRestitution ) );
+		contact->setTangentialImpactLaw ( new PlanarCoulombImpact ( frictionCoefficient ) );
+		contact->setTangentialForceLaw ( new PlanarCoulombFriction ( frictionCoefficient ) );
+		this->addLink ( contact );
+		contact->setPlotFeature("generalizedForce",enabled);
+		contact->setPlotFeature("generalizedRelativePosition",enabled);
 	}
 }
 
