@@ -44,14 +44,14 @@ int main(int argc, char** argv)
  // add modules to overall dynamic system
  sys1->setConstraintSolver(DynamicSystemSolver::GaussSeidel);
  sys1->setImpactSolver(DynamicSystemSolver::GaussSeidel);
- sys1->setFlushEvery(100);
+ sys1->setFlushEvery(1000);
  sys1->initialize();
  sys1->setStopIfNoConvergence(false,true);
- sys1->setMaxIter(1500);
- sys1->setGeneralizedImpulseTolerance(1e-4);
+ sys1->setMaxIter(300);
+ sys1->setGeneralizedImpulseTolerance(1e-8);
  sys1->setGeneralizedForceTolerance(1e-4);
- sys1->setGeneralizedRelativePositionTolerance(5e-5);
- sys1->setGeneralizedRelativeVelocityTolerance(5e-6);
+ sys1->setGeneralizedRelativePositionTolerance(5e-12);
+ sys1->setGeneralizedRelativeVelocityTolerance(5e-10);
  //sys->setgTol(1e-6);
  //sys->setgdTol(2e-3);
  //sys->setLaTol(2e-2);

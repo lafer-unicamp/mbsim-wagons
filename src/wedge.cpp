@@ -54,61 +54,76 @@ void Wedge::setDepth(double d_)
 
 void Wedge::buildContour(void)
 {  
-  int numberOfPoints = 8;
-  
-  pointTable->resize(numberOfPoints,3);
-  
-  double tip = 0.05;
-  
-  /// First point (upper left)
-  (*pointTable)(0,0) = - tip * height * tan(angle2Radians);
-  (*pointTable)(0,1) = - tip * height;
-  (*pointTable)(0,2) = 0.0;
-  
-  /// Second point (lower left)
-  (*pointTable)(1,0) = - height * tan(angle2Radians);
-  (*pointTable)(1,1) = -height;
-  (*pointTable)(1,2) = 0.0;
-  
-  /// Third point (lower right)
-  (*pointTable)(2,0) = height * tan(angle1Radians);
-  (*pointTable)(2,1) = -height;
-  (*pointTable)(2,2) = 0.0;
-  
-  /// Fourth point (upper right)
-  (*pointTable)(3,0) = tip * height * tan(angle1Radians);
-  (*pointTable)(3,1) = - tip * height;
-  (*pointTable)(3,2) = 0.0;
-  
+	/// Number of points per side
+	int numberOfPoints = 4;
 
-  /// Fifth, sixth, seventh, and eigth points (depth)
-  for (int i = 0; i < numberOfPoints/2; i++){
-	  (*pointTable)(i+numberOfPoints/2,0) = (*pointTable)(i,0);
-	  (*pointTable)(i+numberOfPoints/2,1) = (*pointTable)(i,1);
-	  (*pointTable)(i+numberOfPoints/2,2) = depth;
-  }
+	pointTable->resize(2*numberOfPoints,3);
+
+	double tip = 0.05;
+
+	/// First point (upper left)
+	(*pointTable)(0,0) = - tip * height * tan(angle2Radians);
+	(*pointTable)(0,1) = - tip * height;
+	(*pointTable)(0,2) = 0.0;
+
+	/// Third point (lower left)
+	(*pointTable)(2,0) = - height * tan(angle2Radians);
+	(*pointTable)(2,1) = -height;
+	(*pointTable)(2,2) = 0.0;
+
+	/// Fifth point (lower right)
+	(*pointTable)(4,0) = height * tan(angle1Radians);
+	(*pointTable)(4,1) = -height;
+	(*pointTable)(4,2) = 0.0;
+
+	/// Seventh point (upper right)
+	(*pointTable)(6,0) = tip * height * tan(angle1Radians);
+	(*pointTable)(6,1) = - tip * height;
+	(*pointTable)(6,2) = 0.0;
 
 
-  for(int i=0; i<numberOfPoints; i++) {
-	  std::stringstream s;
-	  std::stringstream frame_name;
-	  s << i+1;
-	  frame_name << this->name << "-frame_" << i+1;
-	  fmatvec::Vec *position = new fmatvec::Vec(3,fmatvec::INIT,0.0);
-	  position->operator()(0) = (*pointTable)(i,0);
-	  position->operator()(1) = (*pointTable)(i,1);
-	  position->operator()(2) = (*pointTable)(i,2);
-	  addFrame(new MBSim::FixedRelativeFrame(frame_name.str(),
-					  *position,
-					  fmatvec::SqrMat(3, fmatvec::EYE),
-					  geometryReferenceFrame));
-	  MBSim::Point *point = new MBSim::Point(s.str(),
-			  getFrame(frame_name.str()));
-	  point->enableOpenMBV();
-	  addContour(point);
-  }
+	/// Second, fourth, sixth, and eighth points (depth)
+	for (int i = 1; i < numberOfPoints; i+=2){
+		(*pointTable)(i,0) = (*pointTable)(i-1,0);
+		(*pointTable)(i,1) = (*pointTable)(i-1,1);
+		(*pointTable)(i,2) = depth;
+	}
 
-}
+	MBSim::CompoundContour *leftFace = new MBSim::CompoundContour("Left face");
+	MBSim::CompoundContour *rightFace = new MBSim::CompoundContour("Right face");
+	MBSim::Point *point;
+
+	std::stringstream s;
+	std::stringstream frame_name;
+
+	for(int i=0; i<2*numberOfPoints; i++) {
+
+		s.str("");
+		frame_name.str("");
+
+		s << i+1;
+		frame_name << this->name << "-frame_" << i+1;
+
+		fmatvec::Vec *position = new fmatvec::Vec(3,fmatvec::INIT,0.0);
+		position->operator()(0) = (*pointTable)(i,0);
+		position->operator()(1) = (*pointTable)(i,1);
+		position->operator()(2) = (*pointTable)(i,2);
+
+		addFrame(new MBSim::FixedRelativeFrame(frame_name.str(),
+				*position,
+				fmatvec::SqrMat(3, fmatvec::EYE),
+				geometryReferenceFrame));
+
+		point = new MBSim::Point(s.str(),getFrame(frame_name.str()));
+
+		if ( i < numberOfPoints ) leftFace->addContour(point);
+		else rightFace->addContour(point);
+	}
+
+	this->addContour(leftFace);
+	this->addContour(rightFace);
+
+} /*END buildContour */
 
 void Wedge::enableOpenMBV(bool enable)
 {
@@ -116,7 +131,7 @@ void Wedge::enableOpenMBV(bool enable)
     shared_ptr<vector<shared_ptr<OpenMBV::PolygonPoint>>> vecPoint =
     		make_shared<vector<shared_ptr<OpenMBV::PolygonPoint>>>();
     double x,y,z;
-    for (unsigned i=0; i < 4; i++){
+    for (unsigned i=0; i < 8; i+=2){
 	x = this->getPointTable()->operator()(i,0);
 	y = this->getPointTable()->operator()(i,1);
 	z = this->getPointTable()->operator()(i,2);

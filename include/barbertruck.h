@@ -94,6 +94,14 @@ private:
 	void setSpringConnectionPointsFrames(MBSim::RigidBody *body, double _distanceBetweenSprings,
 			double _lateralOffset, double _height, int lado);
 
+	/// \brief configures wedge contacts
+	/// \param Name of the wedge face TODO improve this
+	/// \param Other component face contour
+	/// \param Friction coefficient
+	/// \param Restitution coefficient
+	/// \param Whether there is an observer (default = false, no observer)
+	void setWedgeContacts(Contour *,Contour *,double ,double, bool observerActive=false );
+
 };
 
 #endif // BARBERTRUCK_H

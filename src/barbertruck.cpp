@@ -48,7 +48,8 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 	double wedgeMass = 2 * 12; // [kg] times two to represent 4 wedges per bolster
 	double wedgeHeight = 0.2; // [m]
 	double wedgeDepth = 0.10; // [m]
-	double wedgeSpringStiffness = 2 * 240000; // [N/m]
+	double wedgeSpringStiffness = 240000; // [N/m]
+	double wedgeSpringFreeLength = 0.2544; // [m]
 	double wheelBase = 1.725;
 	// double wheelRadius = 0.45;
 	// side frame mass properties are doubled to represent both sides of the truck
@@ -64,7 +65,7 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 	double bolsterSpringStiffness = 484000; // [N/m]
 	double springBedOffset = 0.143; // [m]
 	//   double t1,t2,t3 = 0; // temporary storage
-	double coefRestitution = 0.05;  // TODO modify this parameter to be setted externally
+	double coefRestitution = 0.005;  // TODO modify this parameter to be setted externally
 
 	//acceleration of gravity
 	MBSimEnvironment::getInstance()->setAccelerationOfGravity ( Vec ( "[0.;-9.810;0]" ) );
@@ -97,7 +98,7 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 	// "L",Vec ( "[0.;0.;0.]" ),SqrMat ( 3,EYE ) ) );
 	/// ------------ Frames for the wedges ----------------------------------------
 	pos ( 0 ) = -.17102 + 0.1 * tan(angleSideframe);
-	pos ( 1 ) = -0.0219;
+	pos ( 1 ) = -0.02191;
 	pos ( 2 ) = sideFrameTrack/2;
 	bolster->addFrame ( new FixedRelativeFrame ( "W2",pos,SqrMat ( 3,EYE ) ) );
 	pos ( 0 ) = -pos ( 0 );
@@ -248,6 +249,7 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 	sideFrame->addFrame(new FixedRelativeFrame("sframe_central_contact_plane",
 			pos,
 			BasicRotAKIz(0.5 * M_PI)));
+	cout << BasicRotAKIz(0.5 * M_PI) << endl;
 	Plane *ground = new Plane ( "Ground",
 			sideFrame->getFrame("sframe_central_contact_plane") );
 	ground->enableOpenMBV(_transparency=0.6);
@@ -271,9 +273,9 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 	//  Cylindrical joint left wheel-sideframe
 	Joint* cylindrical1 = new Joint("CY1");
 	cylindrical1->setForceDirection("[1,0;0,1;0,0]");
-//	cylindrical1->setMomentDirection("[1;0;0]");
+	//	cylindrical1->setMomentDirection("[1;0;0]");
 	cylindrical1->setForceLaw(new  BilateralConstraint());
-//	cylindrical1->setMomentLaw(new BilateralConstraint());
+	//	cylindrical1->setMomentLaw(new BilateralConstraint());
 	//cylindrical1->setImpactForceLaw(new BilateralImpact());
 	cylindrical1->connect(sideFrame->getFrame("RL"),wheelL->getFrameC());
 	addLink(cylindrical1);
@@ -310,24 +312,24 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 			relativePosition,SqrMat(3,EYE)));
 	relativePosition(0) = - relativePosition(0);
 	sideFrame->addFrame(new FixedRelativeFrame(wedgeSpringNameRoot + toStr(2),
-				relativePosition,SqrMat(3,EYE)));
+			relativePosition,SqrMat(3,EYE)));
 	relativePosition(2) = - relativePosition(2);
 	sideFrame->addFrame(new FixedRelativeFrame(wedgeSpringNameRoot + toStr(4),
-				relativePosition,SqrMat(3,EYE)));
+			relativePosition,SqrMat(3,EYE)));
 	relativePosition(0) = - relativePosition(0);
 	sideFrame->addFrame(new FixedRelativeFrame(wedgeSpringNameRoot + toStr(3),
-					relativePosition,SqrMat(3,EYE)));
+			relativePosition,SqrMat(3,EYE)));
 
 	relativePosition = 0. * relativePosition;
 	relativePosition(1) = -wedgeHeight/3;
 	wedge1->addFrame(new FixedRelativeFrame(wedgeSpringNameRoot,
 			relativePosition,SqrMat(3,EYE)));
 	wedge2->addFrame(new FixedRelativeFrame(wedgeSpringNameRoot,
-				relativePosition,SqrMat(3,EYE)));
+			relativePosition,SqrMat(3,EYE)));
 	wedge3->addFrame(new FixedRelativeFrame(wedgeSpringNameRoot,
-					relativePosition,SqrMat(3,EYE)));
+			relativePosition,SqrMat(3,EYE)));
 	wedge4->addFrame(new FixedRelativeFrame(wedgeSpringNameRoot,
-						relativePosition,SqrMat(3,EYE)));
+			relativePosition,SqrMat(3,EYE)));
 
 
 	// Wedge spring group force law
@@ -341,7 +343,7 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 	// Spring group connecting right wedge to sideframe
 	for (unsigned int i = 1; i <= 4; i++){
 		SpringDamper *springWedge = new SpringDamper ( "Spring-Wedge-" + toStr(i) );
-		springWedge->setUnloadedLength(0.27);
+		springWedge->setUnloadedLength(wedgeSpringFreeLength);
 		springWedge->connect ( sideFrame->getFrame ( wedgeSpringNameRoot + toStr(i) ),
 				dynamic_cast<RigidBody*>(getObject("Wedge " + toStr(i)))->getFrame ( wedgeSpringNameRoot) );
 		springWedge->setForceFunction ( wedgeSpringLaw );
@@ -426,106 +428,21 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 	/// ------------------------ DEFITION OF THE CONTACTS -----------------------
 
 	// Establish contacts
+	setWedgeContacts(wedge1->getContour("Left face"),bolster->getContour("Contact plane right"),
+			frictionCoefficient,coefRestitution);
+	setWedgeContacts(wedge1->getContour("Right face"),sideframeR,frictionCoefficient,coefRestitution);
 
-	// contacts between left wedge and sideframe
-	Contact *contact;
-	int numberOfContacts = wedge2->getContours().size() / 2;
-	std::vector<int> idx(4,0);
-	idx[0] = 0;
-	idx[1] = 1;
-	idx[2] = 4;
-	idx[3] = 5;
+	setWedgeContacts(wedge2->getContour("Left face"),sideframeL,frictionCoefficient,coefRestitution);
+	setWedgeContacts(wedge2->getContour("Right face"),bolster->getContour("Contact plane left"),
+			frictionCoefficient,coefRestitution);
 
-	for ( int i = 0; i < numberOfContacts; i++ )
-	{
-		stringstream s;
-		string cNumber;
-		s << i+1;
-		cNumber = s.str();
-
-		contact = new Contact ( std::string ( "Contact_WedgeSideframe_Left-" ) + cNumber );
-		contact->connect ( wedge2->getContours() [idx[i]],sideframeL );
-		contact->setNormalForceLaw ( new UnilateralConstraint() );
-		contact->setNormalImpactLaw ( new UnilateralNewtonImpact ( coefRestitution ) );
-		contact->setTangentialImpactLaw ( new PlanarCoulombImpact ( frictionCoefficient ) );
-		contact->setTangentialForceLaw ( new PlanarCoulombFriction ( frictionCoefficient ) );
-		this->addLink ( contact );
-		contact->setPlotFeature("generalizedForce",enabled);
-		contact->setPlotFeature("generalizedRelativePosition",enabled);
-	}
-
-	// contacts between left wedge and bolster
-	idx[0] = 2;
-	idx[1] = 3;
-	idx[2] = 6;
-	idx[3] = 7;
-
-	for ( int i = 0; i < numberOfContacts; i++ )
-	{
-		stringstream s;
-		string cNumber;
-		s << i+1;
-		cNumber = s.str();
-
-		contact = new Contact ( std::string ( "Contact_WedgeBolster_Left-" ) + cNumber );
-		contact->connect ( wedge2->getContours() [idx[i]],bolster->getContour("Contact plane left") );
-		contact->setNormalForceLaw ( new UnilateralConstraint() );
-		contact->setNormalImpactLaw ( new UnilateralNewtonImpact ( coefRestitution ) );
-		contact->setTangentialImpactLaw ( new PlanarCoulombImpact ( frictionCoefficient ) );
-		contact->setTangentialForceLaw ( new PlanarCoulombFriction ( frictionCoefficient ) );
-		this->addLink ( contact );
-		contact->setPlotFeature("generalizedForce",enabled);
-		contact->setPlotFeature("generalizedRelativePosition",enabled);
-
-	}
-
-	// contacts between right wedge and bolster
-	idx[0] = 0;
-	idx[1] = 1;
-	idx[2] = 4;
-	idx[3] = 5;
-
-	for ( int i = 0; i < numberOfContacts; i++ )
-	{
-		stringstream s;
-		string cNumber;
-		s << i+1;
-		cNumber = s.str();
-
-		contact= new Contact ( std::string ( "Contact_WedgeBolster_Right-" ) + cNumber );
-		contact->connect ( wedge1->getContours() [idx[i]],bolster->getContour("Contact plane right") );
-		contact->setNormalForceLaw ( new UnilateralConstraint() );
-		contact->setNormalImpactLaw ( new UnilateralNewtonImpact ( coefRestitution ) );
-		contact->setTangentialImpactLaw ( new PlanarCoulombImpact ( frictionCoefficient ) );
-		contact->setTangentialForceLaw ( new PlanarCoulombFriction ( frictionCoefficient ) );
-		this->addLink ( contact);
-		contact->setPlotFeature("generalizedForce",enabled);
-		contact->setPlotFeature("generalizedRelativePosition",enabled);
-	}
-
-	// contacts between right wedge and sideframe
-	idx[0] = 2;
-	idx[1] = 3;
-	idx[2] = 6;
-	idx[3] = 7;
-
-	for ( int i = 0; i < numberOfContacts; i++ )
-	{
-		stringstream s;
-		string cNumber;
-		s << i+1;
-		cNumber = s.str();
-
-		contact = new Contact ( std::string ( "Contact_WedgeSideframe_Right-" ) + cNumber );
-		contact->connect ( wedge1->getContours() [idx[i]],sideframeR );
-		contact->setNormalForceLaw ( new UnilateralConstraint() );
-		contact->setNormalImpactLaw ( new UnilateralNewtonImpact ( coefRestitution ) );
-		contact->setTangentialImpactLaw ( new PlanarCoulombImpact ( frictionCoefficient ) );
-		contact->setTangentialForceLaw ( new PlanarCoulombFriction ( frictionCoefficient ) );
-		this->addLink ( contact );
-		contact->setPlotFeature("generalizedForce",enabled);
-		contact->setPlotFeature("generalizedRelativePosition",enabled);
-	}
+	setWedgeContacts(wedge3->getContour("Left face"),bolster->getContour("Contact plane right"),
+			frictionCoefficient,coefRestitution);
+	setWedgeContacts(wedge3->getContour("Right face"),sideframeR,frictionCoefficient,coefRestitution);
+//
+	setWedgeContacts(wedge4->getContour("Left face"),sideframeL,frictionCoefficient,coefRestitution);
+	setWedgeContacts(wedge4->getContour("Right face"),bolster->getContour("Contact plane left"),
+			frictionCoefficient,coefRestitution);
 }
 
 // getWheelBase
@@ -583,6 +500,45 @@ void BarberTruck::setSpringConnectionPointsFrames(MBSim::RigidBody *_body,
 		}
 	}
 
+}
+
+void BarberTruck::setWedgeContacts(Contour *wedgeFace,
+		Contour *otherFace,
+		double frictionCoefficient,
+		double coefRestitution,
+		bool observerActive){
+
+	Contact *contact;
+	std::stringstream contactName;
+
+	for (unsigned i=0;
+			i < dynamic_cast<MBSim::CompoundContour*>(wedgeFace)->getNumberOfElements();
+			i++){
+		contactName.str("");
+		contactName << "Contact_" << wedgeFace->getParent()->getName() <<
+				wedgeFace->getName() <<
+				"-" << otherFace->getName() << "-" << i;
+		contact = new Contact ( contactName.str() );
+		contact->connect ( dynamic_cast<MBSim::CompoundContour*>(wedgeFace)->getContour(i),
+				otherFace );
+		contact->setNormalForceLaw ( new UnilateralConstraint() );
+		contact->setNormalImpactLaw ( new UnilateralNewtonImpact ( coefRestitution ) );
+		contact->setTangentialImpactLaw ( new PlanarCoulombImpact ( frictionCoefficient ) );
+		contact->setTangentialForceLaw ( new PlanarCoulombFriction ( frictionCoefficient ) );
+		contact->setPlotFeature("generalizedForce",enabled);
+		contact->setPlotFeature("generalizedRelativePosition",enabled);
+		addLink(contact);
+
+		if (observerActive)
+		{
+			ContactObserver *observer = new ContactObserver(std::string("Contact_" + contactName.str()));
+			observer->setContact(contact);
+			observer->enableOpenMBVContactPoints(_size=0.05);
+			observer->enableOpenMBVNormalForce(_size=0.05);
+			observer->enableOpenMBVTangentialForce(_size=0.05);
+			addObserver(observer);
+		}
+	}
 }
 
 

@@ -121,8 +121,8 @@ System::System(const string& projectName, const string& inputFileName) :
 	// rear wheel, front truck = wheel2
 	frontTruck->wheelR->setTranslation(new LinearTranslation<VecV>("[1;0;0]"));
 	// front wheel, rear truck = wheel3
-	frontTruck->sideFrame->setRotation(new CompositeFunction<RotMat3(double(double))>(
-			new RotationAboutXAxis<double>(), new Angle(freq,3*amplitude,t0)));
+//	frontTruck->sideFrame->setRotation(new CompositeFunction<RotMat3(double(double))>(
+//			new RotationAboutXAxis<double>(), new Angle(freq,3*amplitude,t0)));
 
 
 	setPlotFeatureRecursive("generalizedPosition",enabled);

@@ -21,7 +21,7 @@ SRCDIR = src
 CXX = g++-4.8
 libsources = 
 objects = $(patsubst $(SRCDIR)/%,$(BUILDDIR)/%,$(sources:.$(SRCEXT)=.o))
-CPPFLAGS= -m64 -std=c++11 -Wall -Wfatal-errors -Werror -Wno-unknown-pragmas -fopenmp \
+CPPFLAGS= -g3 -m64 -std=c++11 -Wall -Wfatal-errors -Werror -Wno-unknown-pragmas -fopenmp \
 `pkg-config --cflags mbsim`
 #CPPFLAGS= -g3 -m64 -std=c++11 -Wall -D_GLIBCXX_USE_CXX11_ABI=0 -Wfatal-errors -Werror -Wno-unknown-pragmas -fopenmp \
 `pkg-config --cflags mbsim`

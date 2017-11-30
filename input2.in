@@ -1,5 +1,5 @@
 %======================== OVERALL CONTROLS ===================================%
-SIMULATION_TIME=0.002
+SIMULATION_TIME=1.0
 SYSTEM_NAME=test
 %======================== MOTION INPUT =======================================%
 AMPLITUDE=0.005

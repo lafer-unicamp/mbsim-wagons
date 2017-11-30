@@ -9,6 +9,7 @@
 #define TRUCK_H
 
 #include "mbsim/group.h"
+#include "wedge.h"
 
 class Truck : public MBSim::Group
 {
