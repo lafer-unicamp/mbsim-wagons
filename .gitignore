@@ -39,3 +39,4 @@
 *.sum
 *.plt
 *.asc
+.*.lock

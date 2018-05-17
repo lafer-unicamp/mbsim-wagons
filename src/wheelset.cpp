@@ -7,9 +7,21 @@
 
 #include "wheelset.h"
 
-Wheelset::Wheelset(const std::string& name) : MBSim::RigidBody(name), track(1.0)
+Wheelset::Wheelset(const std::string& name) : Wheelset(name, 1.0, 1.0)
+{
+}
+
+Wheelset::Wheelset(const std::string& name,
+		double _track, double _sfTrack) : MBSim::RigidBody(name), track(_track), sideframeTrack(_sfTrack)
 {
   // TODO Auto-generated constructor stub
+	fmatvec::Vec3 pos(fmatvec::INIT,0.0);
+
+	pos(2) = - this->sideframeTrack / 2;
+	this->addFrame ( new MBSim::FixedRelativeFrame ( "SFL",pos,fmatvec::SqrMat ( 3,fmatvec::EYE ) ) );
+
+	pos(2) = -pos(2);
+	this->addFrame ( new MBSim::FixedRelativeFrame ( "SFR",pos,fmatvec::SqrMat ( 3,fmatvec::EYE ) ) );
 
 }
 
@@ -17,7 +29,6 @@ void Wheelset::enableOpenMBV()
 {
 	std::shared_ptr<std::vector<std::shared_ptr<OpenMBV::PolygonPoint>>> points =
 					std::make_shared<std::vector<std::shared_ptr<OpenMBV::PolygonPoint>>>();
-//  std::vector<OpenMBV::PolygonPoint*>* points = new std::vector<OpenMBV::PolygonPoint*>(7);
   points->push_back(OpenMBV::PolygonPoint::create(.1,-0.067,0.));
   points->push_back(OpenMBV::PolygonPoint::create(.4344,-0.067,0.));
   points->push_back(OpenMBV::PolygonPoint::create(.4572,0.0,0.));

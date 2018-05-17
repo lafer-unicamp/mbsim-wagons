@@ -28,33 +28,35 @@ using namespace fmatvec;
 
 class Motion : public MBSim::Function<Vec3(double)> {
 public:
-	Motion(double _omegaInHertz, double _amp, double _tdelay):omega(_omegaInHertz * 2 * M_PI),amp(_amp),delay(_tdelay){}
+	Motion(double _omegaInHertz, double _amp, double _tdelay, int _dof):omega(_omegaInHertz * 2 * M_PI),
+	amp(_amp/2),delay(_tdelay),dof(_dof){}
 	int getArgSize() const {return 3;}
 	Vec3 operator()(const double &t) {
 		Vec3 r;
-		r(0) = amp * cos(om(t));
+		r(dof) = amp * ( cos(om(t)) - 1 );
 		return r;
 	}
 	Vec3 parDer(const double &t) {
 		Vec3 jh;
-		jh(0) =  amp * (-sin(om(t))*omega);
+		jh(dof) =  amp * (-sin(om(t))*omega);
 		return jh;
 	}
 	Vec3 parDerParDer(const double &t) {
 		Vec3 jb;
-		jb(0) =  amp * (cos(om(t))*omega*omega);
+		jb(dof) =  amp * (cos(om(t))*omega*omega);
 		return jb;
 	}
 private:
 	double om(const double &t) {
 		double timeDependentArgument;
 		if(t <= delay) timeDependentArgument = 0.;
-		else timeDependentArgument = omega * (t - delay) + M_PI;
+		else timeDependentArgument = omega * (t - delay);
 		return timeDependentArgument;
 	}
 	double omega;
 	double amp;
 	double delay;
+	double dof;
 };
 
 class Angle : public MBSim::Function<double(double)> {
@@ -117,9 +119,9 @@ System::System(const string& projectName, const string& inputFileName) :
 	//	/// -------------- MOTION DEFINITION ----------------------------------------
 
 	// front wheel, front truck = wheel 1
-	frontTruck->wheelL->setTranslation(new Motion(freq,amplitude,t0));
+	frontTruck->wheelRear->setTranslation(new Motion(freq,2*amplitude,t0,1));
 	// rear wheel, front truck = wheel2
-	frontTruck->wheelR->setTranslation(new LinearTranslation<VecV>("[1;0;0]"));
+	frontTruck->wheelFront->setTranslation(new LinearTranslation<VecV>("[1,0;0,0;0,1]"));
 	// front wheel, rear truck = wheel3
 //	frontTruck->sideFrame->setRotation(new CompositeFunction<RotMat3(double(double))>(
 //			new RotationAboutXAxis<double>(), new Angle(freq,3*amplitude,t0)));

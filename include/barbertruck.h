@@ -24,8 +24,10 @@
 #include "truck.h"
 #include "wedge.h"
 #include "bolster.h"
+#include "sideframe.h"
 #include "sinusoidalmovement.h"
 #include "wheelset.h"
+#include "jointFactory.h"
 #include "mbsim/objects/rigid_body.h"
 #include "mbsim/links/joint.h"
 #include "mbsim/links/spring_damper.h"
@@ -40,6 +42,10 @@
 #include "mbsim/constitutive_laws/constitutive_laws.h"
 #include "mbsim/frames/fixed_relative_frame.h"
 #include "mbsim/utils/rotarymatrices.h"
+#include "mbsim/observers/contact_observer.h"
+#include "mbsim/observers/mechanical_link_observer.h"
+#include "mbsim/functions/kinetics/linear_elastic_function.h"
+#include "mbsim/links/generalized_elastic_connection.h"
 
 /*
  * This object is not included in the mbsim 11.0 official distribution,
@@ -73,9 +79,10 @@ public:
 	Wedge* wedge3;
 	Wedge* wedge4;
 	Bolster* bolster;
-	RigidBody* sideFrame;
-	Wheelset* wheelL;
-	Wheelset* wheelR;
+	Sideframe* sideFrameLeft;
+	Sideframe* sideFrameRight;
+	Wheelset* wheelRear;
+	Wheelset* wheelFront;
 
 	void setWheelBase(double wB_);
 	double getWheelBase();

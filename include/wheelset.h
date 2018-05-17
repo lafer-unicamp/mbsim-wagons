@@ -10,35 +10,27 @@
 
 #include <string>
 #include <mbsim/objects/rigid_body.h>
+#include "mbsim/frames/fixed_relative_frame.h"
 #include "openmbvcppinterface/rotation.h"
 #include "openmbvcppinterface/compoundrigidbody.h"
 
 class Wheelset : public MBSim::RigidBody
 {
 public:
-  Wheelset(const std::string& name);
+	// Default constructor
+	Wheelset(const std::string& name);
+	Wheelset(const std::string& name, double _track, double _sfTrack);
 
-  /*
-   * Enable graphical representation
-   * To describe the wheel profile, the OpenMBV::Rotation class is used
-   * This class performs a rotation around the Y axis
-   */
-  void enableOpenMBV();
-
-  double
-  getTrack() const
-  {
-    return track;
-  }
-
-  void
-  setTrack(double track)
-  {
-    this->track = track;
-  }
+	/*
+	 * Enable graphical representation
+	 * To describe the wheel profile, the OpenMBV::Rotation class is used
+	 * This class performs a rotation around the Y axis
+	 */
+	void enableOpenMBV();
 
 protected:
-  double track;
+	double track;
+	double sideframeTrack;
 };
 
 #endif /* WHEELSET_H_ */

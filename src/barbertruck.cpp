@@ -19,10 +19,6 @@
 
 
 #include <barbertruck.h>
-#include "mbsim/observers/contact_observer.h"
-#include "mbsim/observers/mechanical_link_observer.h"
-#include "mbsim/functions/kinetics/linear_elastic_function.h"
-#include "mbsim/links/generalized_elastic_connection.h"
 
 BarberTruck::BarberTruck( const std::string& projectName ): Truck(projectName) {
 	BarberTruck (projectName,false);
@@ -45,9 +41,9 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 	bolsterInertiaTensor(1,1) = 99;
 	bolsterInertiaTensor(2,2) = 7;
 	double frictionCoefficient = 0.25; // [-]
-	double wedgeMass = 2 * 12; // [kg] times two to represent 4 wedges per bolster
+	double wedgeMass = 12; // [kg] times two to represent 4 wedges per bolster
 	double wedgeHeight = 0.2; // [m]
-	double wedgeDepth = 0.10; // [m]
+	double wedgeDepth = 0.12; // [m]
 	double wedgeSpringStiffness = 240000; // [N/m]
 	double wedgeSpringFreeLength = 0.2544; // [m]
 	double wheelBase = 1.725;
@@ -55,14 +51,14 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 	// side frame mass properties are doubled to represent both sides of the truck
 	double sideFrameHeight = .495; // [m]
 	double sideFrameWidth = .45; // [m]
-	double sideFrameMass = 2 * 290; // [kg]
+	double sideFrameMass = 290; // [kg]
 	double sideFrameTrack = 2.197; // [m]
 	fmatvec::SymMat sideFrameInertiaTensor(3,fmatvec::EYE); // [kg.m²]
-	sideFrameInertiaTensor(0,0) = 2 * 4;
-	sideFrameInertiaTensor(1,1) = 2 * 91;
-	sideFrameInertiaTensor(2,2) = 2 * 106;
+	sideFrameInertiaTensor(0,0) = 4;
+	sideFrameInertiaTensor(1,1) = 91;
+	sideFrameInertiaTensor(2,2) = 106;
 	double truckTrack = 1.575; // [m]
-	double bolsterSpringStiffness = 484000; // [N/m]
+	double bolsterSpringStiffness = 4.839868e+05; // [N/m]
 	double springBedOffset = 0.143; // [m]
 	//   double t1,t2,t3 = 0; // temporary storage
 	double coefRestitution = 0.005;  // TODO modify this parameter to be setted externally
@@ -77,19 +73,21 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 	wedge1 = new Wedge ( "Wedge 1" );
 	wedge3 = new Wedge ( "Wedge 3" );
 	wedge4 = new Wedge ( "Wedge 4" );
-	sideFrame = new RigidBody ( "Side frame" );
+	sideFrameLeft = new Sideframe ( "Sideframe Left" );
+	sideFrameRight = new Sideframe ( "Sideframe Right" );
 	bolster = new Bolster ( "Bolster" );
-	wheelL = new Wheelset ( "Wheel Left ");
-	wheelR = new Wheelset ( "Wheel Right" );
+	wheelRear = new Wheelset ( "Wheelset Rear", truckTrack, sideFrameTrack);
+	wheelFront = new Wheelset ( "Wheelset Front", truckTrack, sideFrameTrack);
 
 	this->addObject ( wedge2 );
 	this->addObject ( wedge1 );
 	this->addObject ( wedge3 );
 	this->addObject ( wedge4 );
 	this->addObject ( bolster );
-	this->addObject ( sideFrame );
-	this->addObject ( wheelL );
-	this->addObject ( wheelR );
+	this->addObject ( sideFrameLeft );
+	this->addObject( sideFrameRight );
+	this->addObject ( wheelRear );
+	this->addObject ( wheelFront );
 
 	/// ------------------------------ FRAMES -----------------------------------
 	/// ------------ Frames on environment --------------------------------------
@@ -112,16 +110,29 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 	pos ( 1 ) = -0.00785 + 0.1 + 0.00162;
 	pos ( 2 ) = 0.0;
 	this->addFrame ( new FixedRelativeFrame ( "B",pos,SqrMat ( 3,EYE ) ) );
-	sideFrame->addFrame ( new FixedRelativeFrame ( "B",pos,SqrMat ( 3,EYE ) ) );
-	sideFrame->addFrame ( new FixedRelativeFrame ( "BS",Vec ( "[0.0;-.18663;0.0]" ),SqrMat ( 3,EYE ),sideFrame->getFrame ( "B" ) ) );
+	sideFrameLeft->addFrame ( new FixedRelativeFrame ( "B",pos,SqrMat ( 3,EYE ) ) );
+	sideFrameLeft->addFrame ( new FixedRelativeFrame ( "BS",Vec ( "[0.0;-.18663;0.0]" ),SqrMat ( 3,EYE ),sideFrameLeft->getFrame ( "B" ) ) );
 	//
 	pos(0) = -wheelBase/2;
 	pos(1) = -0.0;
+	pos(2) =0;
 	this->addFrame(new FixedRelativeFrame("RL",pos,SqrMat(3,EYE)));
-	sideFrame->addFrame(new FixedRelativeFrame("RL",pos,SqrMat(3,EYE)));
+	sideFrameLeft->addFrame(new FixedRelativeFrame("RL",pos,SqrMat(3,EYE)));
+	sideFrameRight->addFrame(new FixedRelativeFrame("RL",pos,SqrMat(3,EYE)));
 	pos(0) = wheelBase / 2;
 	this->addFrame(new FixedRelativeFrame("RR",pos,SqrMat(3,EYE)));
-	sideFrame->addFrame(new FixedRelativeFrame("RR",pos,SqrMat(3,EYE)));
+	sideFrameLeft->addFrame(new FixedRelativeFrame("RR",pos,SqrMat(3,EYE)));
+	sideFrameRight->addFrame(new FixedRelativeFrame("RR",pos,SqrMat(3,EYE)));
+
+	sideFrameRight->getFrame("RR")->enableOpenMBV();
+	sideFrameLeft->getFrame("RR")->enableOpenMBV();
+	/// ------------- Sideframes Frames ----------------------------------------
+	pos.init(0);
+	pos(2) = -sideFrameTrack / 2;
+	this->addFrame(new FixedRelativeFrame("SF1",pos, SqrMat(3,EYE)));
+	pos(2) = - pos(2);
+	this->addFrame(new FixedRelativeFrame("SF2",pos, SqrMat(3,EYE)));
+
 
 
 
@@ -211,82 +222,74 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 	bolster->setContactPlanes();
 	// degrees of freedom
 	bolster->setTranslation ( new LinearTranslation<VecV> ( "[1,0,0;0,1,0;0,0,1]") );
-	bolster->setRotation ( new RotationAboutAxesXZ<VecV>() );
+	bolster->setRotation ( new RotationAboutAxesXYZ<VecV>() );
 
-	/// ------------------- DEFINITION OF THE SIDEFRAME -------------------------
-	sideFrame->setMass ( sideFrameMass );
-	sideFrame->setInertiaTensor( sideFrameInertiaTensor );
-	sideFrame->setFrameOfReference(this->getFrameI());
-	sideFrame->setFrameForKinematics ( sideFrame->getFrameC() );
-	sideFrame->getFrameC()->enableOpenMBV();
-	sideFrame->setTranslation( new LinearTranslation<VecV> ("[1,0;0,1;0,0]") );
-	sideFrame->setRotation( new RotationAboutZAxis<VecV>() );
+	/// ------------------- DEFINITION OF THE SIDEFRAMES ------------------------
+	sideFrameLeft->setMass ( sideFrameMass );
+	sideFrameLeft->setInertiaTensor( sideFrameInertiaTensor );
+	sideFrameLeft->setFrameOfReference(this->getFrame("SF1"));
+	sideFrameLeft->setFrameForKinematics ( sideFrameLeft->getFrameC() );
+	sideFrameLeft->getFrameC()->enableOpenMBV();
+	sideFrameLeft->setTranslation( new LinearTranslation<VecV> ("[1,0;0,1;0,0]") );
+	sideFrameLeft->setRotation( new RotationAboutAxesXZ<VecV>() );
 
-	// Contact plane sideframe-left wedge definition
-	pos ( 0 ) = -sideFrameWidth/2;
-	pos ( 1 ) = -sideFrameHeight/2;
-	fmatvec::SqrMat3 rodaroda = BasicRotAIKz(-angleSideframe);
-	sideFrame->addFrame(new FixedRelativeFrame("sframe_l_contact_plane",
-			pos,
-			rodaroda));
-	Plane *sideframeL = new Plane ( "Side frame left",
-			sideFrame->getFrame("sframe_l_contact_plane") );
-	sideframeL->enableOpenMBV(_transparency=0.6);
-	sideFrame->addContour ( sideframeL );
+	sideFrameLeft->setWindowAngle(angleSideframe);
+	sideFrameLeft->setWindowHeight(sideFrameHeight);
+	sideFrameLeft->setWindowWidth(sideFrameWidth);
+	sideFrameLeft->buildContour();
 
-	// Contact plane sideframe-right wedge definition
-	pos ( 0 ) = -pos ( 0 );
-	sideFrame->addFrame(new FixedRelativeFrame("sframe_r_contact_plane",
-			pos,
-			BasicRotAKIz(-angleSideframe + M_PI)));
-	Plane *sideframeR = new Plane ( "Side frame right",
-			sideFrame->getFrame("sframe_r_contact_plane") );
-	sideframeR->enableOpenMBV(_transparency=0.6);
-	sideFrame->addContour ( sideframeR );
+	sideFrameRight->setMass ( sideFrameMass );
+	sideFrameRight->setInertiaTensor( sideFrameInertiaTensor );
+	sideFrameRight->setFrameOfReference(this->getFrame("SF2"));
+	sideFrameRight->setFrameForKinematics ( sideFrameRight->getFrameC() );
+	sideFrameRight->getFrameC()->enableOpenMBV();
+	sideFrameRight->setTranslation( new LinearTranslation<VecV> ("[1,0;0,1;0,0]") );
+	sideFrameRight->setRotation( new RotationAboutAxesXZ<VecV>() );
 
-
-	pos ( 0 ) = 0.0;
-	sideFrame->addFrame(new FixedRelativeFrame("sframe_central_contact_plane",
-			pos,
-			BasicRotAKIz(0.5 * M_PI)));
-	cout << BasicRotAKIz(0.5 * M_PI) << endl;
-	Plane *ground = new Plane ( "Ground",
-			sideFrame->getFrame("sframe_central_contact_plane") );
-	ground->enableOpenMBV(_transparency=0.6);
-	sideFrame->addContour ( ground );
+	sideFrameRight->setWindowAngle(angleSideframe);
+	sideFrameRight->setWindowHeight(sideFrameHeight);
+	sideFrameRight->setWindowWidth(sideFrameWidth);
+	sideFrameRight->buildContour();
 
 
 	/// ---------------- DEFINITION OF THE WHELLS -------------------------------
-	wheelL->setFrameOfReference(this->getFrame("RL"));
-	wheelL->setFrameForKinematics(wheelL->getFrameC());
-	wheelL->setMass(2000);
-	wheelL->setTrack(truckTrack);
-	wheelL->enableOpenMBV();
+	Vec3 wheelsetOffset(INIT,0.0);
+	wheelsetOffset(0) = - wheelBase / 2;
+	this->addFrame(
+			new FixedRelativeFrame("RWS",wheelsetOffset,SqrMat(3,EYE))
+	);
+	this->addFrame(
+			new FixedRelativeFrame("FWS",-wheelsetOffset,SqrMat(3,EYE))
+	);
 
-	wheelR->setFrameOfReference(this->getFrame("RR"));
-	wheelR->setFrameForKinematics(wheelR->getFrameC());
-	wheelR->setMass(2000);
-	wheelR->setTrack(truckTrack);
-	wheelR->enableOpenMBV();
+
+	wheelRear->setFrameOfReference(this->getFrame("RWS"));
+	wheelRear->setFrameForKinematics(wheelRear->getFrameC());
+	wheelRear->setMass(2000);
+	wheelRear->enableOpenMBV();
+
+	wheelFront->setFrameOfReference(this->getFrame("FWS"));
+	wheelFront->setFrameForKinematics(wheelFront->getFrameC());
+	wheelFront->setMass(2000);
+	wheelFront->enableOpenMBV();
 
 	/// ---------------- DEFINITION OF JOINTS -----------------------------------
-	//  Cylindrical joint left wheel-sideframe
-	Joint* cylindrical1 = new Joint("CY1");
-	cylindrical1->setForceDirection("[1,0;0,1;0,0]");
-	//	cylindrical1->setMomentDirection("[1;0;0]");
-	cylindrical1->setForceLaw(new  BilateralConstraint());
-	//	cylindrical1->setMomentLaw(new BilateralConstraint());
-	//cylindrical1->setImpactForceLaw(new BilateralImpact());
-	cylindrical1->connect(sideFrame->getFrame("RL"),wheelL->getFrameC());
-	addLink(cylindrical1);
+	/// TODO MOMENTS MOMENTS MOMENTS
+	//  Cylindrical joint rear wheelset-sideframe left
+	addLink(new RotaryJoint("Cylindrical Joint: left sideframe to rear wheelset",
+			sideFrameLeft->getFrame("RL"),
+			wheelRear->getFrame("SFL")));
+	// Cylindrical joint front wheelset-sideframe left
+	addLink(new RotaryJoint("Cylindrical Joint: left sideframe to front wheelset",
+			sideFrameLeft->getFrame("RR"),wheelFront->getFrame("SFL")));
 
-	// Cylindrical joint right wheel-sideframe
-	Joint* cylindrical2 = new Joint("CY2");
-	cylindrical2->setForceDirection("[1,0;0,1;0,0]");
-	cylindrical2->setForceLaw(new  BilateralConstraint());
-	//cylindrical2->setImpactForceLaw(new BilateralImpact());
-	cylindrical2->connect(sideFrame->getFrame("RR"),wheelR->getFrameC());
-	addLink(cylindrical2);
+	//  Cylindrical joint rear wheelset-sideframe right
+	addLink(new RotaryJoint("Cylindrical Joint: right sideframe to rear wheelset",
+			sideFrameRight->getFrame("RL"),wheelRear->getFrame("SFR")));
+
+	// Cylindrical joint front wheelset-sideframe right
+	addLink(new RotaryJoint("Cylindrical Joint: right sideframe to front wheelset",
+			sideFrameRight->getFrame("RR"),wheelFront->getFrame("SFR")));
 
 	/// ---------------- DEFINITION OF THE SPRINGS
 	///
@@ -295,29 +298,29 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 			springBedOffset, sideFrameTrack/2,bolsterHeight/2,1);
 	setSpringConnectionPointsFrames(bolster,
 			springBedOffset, -sideFrameTrack/2,bolsterHeight/2,2);
-	setSpringConnectionPointsFrames(sideFrame,
-			springBedOffset, sideFrameTrack/2,sideFrameHeight/2,1);
-	setSpringConnectionPointsFrames(sideFrame,
-			springBedOffset, -sideFrameTrack/2,sideFrameHeight/2,2);
+	setSpringConnectionPointsFrames(sideFrameRight,
+			springBedOffset, 0*sideFrameTrack,sideFrameHeight/2,1);
+	setSpringConnectionPointsFrames(sideFrameLeft,
+			springBedOffset, 0,sideFrameHeight/2,2);
 
 	// Connection frames of the springs
 	Vec3 relativePosition(INIT,0.);
-	relativePosition(2) = sideFrameTrack/2;
+	relativePosition(2) = sideFrameTrack;
 	relativePosition(1) = -sideFrameHeight/2;
 	relativePosition(0) = springBedOffset;
 
 	std::string wedgeSpringNameRoot("Wedge_spring_");
 
-	sideFrame->addFrame(new FixedRelativeFrame(wedgeSpringNameRoot + toStr(1),
+	sideFrameLeft->addFrame(new FixedRelativeFrame(wedgeSpringNameRoot + toStr(1),
 			relativePosition,SqrMat(3,EYE)));
 	relativePosition(0) = - relativePosition(0);
-	sideFrame->addFrame(new FixedRelativeFrame(wedgeSpringNameRoot + toStr(2),
+	sideFrameLeft->addFrame(new FixedRelativeFrame(wedgeSpringNameRoot + toStr(2),
 			relativePosition,SqrMat(3,EYE)));
-	relativePosition(2) = - relativePosition(2);
-	sideFrame->addFrame(new FixedRelativeFrame(wedgeSpringNameRoot + toStr(4),
+	relativePosition(2) = 0;
+	sideFrameLeft->addFrame(new FixedRelativeFrame(wedgeSpringNameRoot + toStr(4),
 			relativePosition,SqrMat(3,EYE)));
 	relativePosition(0) = - relativePosition(0);
-	sideFrame->addFrame(new FixedRelativeFrame(wedgeSpringNameRoot + toStr(3),
+	sideFrameLeft->addFrame(new FixedRelativeFrame(wedgeSpringNameRoot + toStr(3),
 			relativePosition,SqrMat(3,EYE)));
 
 	relativePosition = 0. * relativePosition;
@@ -344,7 +347,7 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 	for (unsigned int i = 1; i <= 4; i++){
 		SpringDamper *springWedge = new SpringDamper ( "Spring-Wedge-" + toStr(i) );
 		springWedge->setUnloadedLength(wedgeSpringFreeLength);
-		springWedge->connect ( sideFrame->getFrame ( wedgeSpringNameRoot + toStr(i) ),
+		springWedge->connect ( sideFrameLeft->getFrame ( wedgeSpringNameRoot + toStr(i) ),
 				dynamic_cast<RigidBody*>(getObject("Wedge " + toStr(i)))->getFrame ( wedgeSpringNameRoot) );
 		springWedge->setForceFunction ( wedgeSpringLaw );
 		this->addLink ( springWedge );
@@ -356,7 +359,7 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 	// Spring group connecting bolster to sideframe
 	std::stringstream springName;
 	std::stringstream frameName;
-	for (unsigned k=0; k < 2; k++){
+	for (unsigned k=0; k < 2; k++){ // this loops alternates between the sideframes
 		for (unsigned i=0; i < 3; i++){
 			for (unsigned j=0; j < 3; j++){
 				springName.str("");
@@ -369,11 +372,12 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 				springBolster->enableOpenMBV(_springRadius=0.8 * springBedOffset / 2,
 						_crossSectionRadius=0.010,
 						_numberOfCoils=5);
-				springBolster->connect(
-						sideFrame->getFrame(sideFrame->getName() + frameName.str()),
-						bolster->getFrame(bolster->getName() + frameName.str())
-				);
-				// barber trucks doesn't have bolster springs under the wedges
+				if ( k == 1 ) springBolster->connect(
+						sideFrameLeft->getFrame(sideFrameLeft->getName() + frameName.str()),
+						bolster->getFrame(bolster->getName() + frameName.str()));
+				else if ( k == 0 ) springBolster->connect(
+						sideFrameRight->getFrame(sideFrameRight->getName() + frameName.str()),
+						bolster->getFrame(bolster->getName() + frameName.str()));
 				// therefore, springs on position 02 and 12 doesn't exist
 				if ( j == 0 || j == 1) this->addLink(springBolster);
 				else if ( i == 2) this->addLink(springBolster);
@@ -383,11 +387,30 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 				// IF ELASTIC CONNECTIONS
 
 				if (bolsterWithBushings){
+					// TODO Add moments
+					/*
+4.085513e+04	2.535569e+04	1.818989e-12	1.607263e+04	7.427344e+05	2.014681e+07
+2.535569e+04	4.839868e+05	-5.261543e+03	-1.011572e+05	5.402705e+05	3.508579e+06
+1.818989e-12	-5.261543e+03	4.085513e+04	-2.014681e+07	2.423125e+05	1.607263e+04
+1.607263e+04	-1.011572e+05	-2.014681e+07	3.278376e+09	1.070903e+08	-2.980232e-08
+7.427344e+05	5.402705e+05	2.423125e+05	1.070903e+08	1.692246e+09	4.999814e+07
+2.014681e+07	3.508579e+06	1.607263e+04	-2.980232e-08	4.999814e+07	3.278376e+09
+
+					 * */
 					LinearElasticFunction *stiffnessFcn = new LinearElasticFunction();
-					SymMat3 stiffnessMatrix(INIT,0.0);
-					stiffnessMatrix(0,0) = 40900;  	//stiffnessMatrix(0,2) = 23300;
-					stiffnessMatrix(1,0) = -5250;	//stiffnessMatrix(1,2) = -5250;
-					stiffnessMatrix(2,0) = 23300;	//stiffnessMatrix(2,2) = 40900;
+					SymMat stiffnessMatrix(6,INIT,0.0);
+					stiffnessMatrix(0,0) = 4.085513e+04;
+					stiffnessMatrix(1,0) = 2.535569e+04*0;	stiffnessMatrix(1,1) = 4.839868e+05*0;
+					stiffnessMatrix(2,0) = 0000;			stiffnessMatrix(2,1) = -5.261543e+03*0;	stiffnessMatrix(2,2) = 4.085513e+04;
+					stiffnessMatrix(3,0) = 1.607263e+03; 	stiffnessMatrix(3,1) = -1.011572e+02*0;	stiffnessMatrix(3,2) = -2.014681e+04;
+						stiffnessMatrix(3,3) = 3.278376e+03;
+					stiffnessMatrix(4,0) = 7.427344e+02;	stiffnessMatrix(4,1) = 5.402705e+02*0;	stiffnessMatrix(4,2) = 2.423125e+02;
+						stiffnessMatrix(4,3) = 1.070903e+02; stiffnessMatrix(4,4) = 1.692246e+03;
+					stiffnessMatrix(5,0) = 2.014681e+04;	stiffnessMatrix(5,1) = 3.508579e+03*0;	stiffnessMatrix(5,2) = 1.607263e+01;
+						stiffnessMatrix(5,3) = 0;			stiffnessMatrix(5,4) = 4.999814e+01;	stiffnessMatrix(5,5) = 3.278376e+03;
+
+
+
 
 					stiffnessFcn->setStiffnessMatrix(stiffnessMatrix);
 					stiffnessFcn->setDampingMatrix(stiffnessMatrix * 0.004);
@@ -397,6 +420,7 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 							new ElasticJoint (springName.str());
 					bushingBolster->setGeneralizedForceFunction(stiffnessFcn);
 					bushingBolster->setForceDirection("[1,0,0;0,1,0;0,0,1");
+					bushingBolster->setMomentDirection("[1,0,0;0,1,0;0,0,1]");
 
 					/// The elastic connection element doesn't have an unloaded
 					/// length definition. Therefore, because on the spring definition
@@ -411,9 +435,12 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 							Vec3("[0;-0.24627;0]"),SqrMat3(EYE),
 							bolster->getFrame(bolster->getName() + frameName.str()));
 					bolster->addFrame(dummyFrame);
-					bushingBolster->connect(
-							sideFrame->getFrame(sideFrame->getName() + frameName.str()),
-							dummyFrame);
+					if ( k == 1 ) bushingBolster->connect(dummyFrame,
+							sideFrameLeft->getFrame(sideFrameLeft->getName() + frameName.str()));
+//							dummyFrame);
+					else if ( k == 0 ) bushingBolster->connect(dummyFrame,
+							sideFrameRight->getFrame(sideFrameRight->getName() + frameName.str()));
+//							dummyFrame);
 					if ( j == 0 || j == 1) this->addLink(bushingBolster);
 					else if ( i == 2) this->addLink(bushingBolster);
 					bushingBolster->setPlotFeatureRecursive("generalizedForce", enabled);
@@ -423,24 +450,24 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 			}
 		}
 	}
-
+// END OF SPRING CONNECTIONS
 
 	/// ------------------------ DEFITION OF THE CONTACTS -----------------------
 
 	// Establish contacts
 	setWedgeContacts(wedge1->getContour("Left face"),bolster->getContour("Contact plane right"),
 			frictionCoefficient,coefRestitution);
-	setWedgeContacts(wedge1->getContour("Right face"),sideframeR,frictionCoefficient,coefRestitution);
+	setWedgeContacts(wedge1->getContour("Right face"),sideFrameRight->getContour("Side frame right"),frictionCoefficient,coefRestitution);
 
-	setWedgeContacts(wedge2->getContour("Left face"),sideframeL,frictionCoefficient,coefRestitution);
+	setWedgeContacts(wedge2->getContour("Left face"),sideFrameRight->getContour("Side frame left"),frictionCoefficient,coefRestitution);
 	setWedgeContacts(wedge2->getContour("Right face"),bolster->getContour("Contact plane left"),
 			frictionCoefficient,coefRestitution);
 
 	setWedgeContacts(wedge3->getContour("Left face"),bolster->getContour("Contact plane right"),
 			frictionCoefficient,coefRestitution);
-	setWedgeContacts(wedge3->getContour("Right face"),sideframeR,frictionCoefficient,coefRestitution);
+	setWedgeContacts(wedge3->getContour("Right face"),sideFrameLeft->getContour("Side frame right"),frictionCoefficient,coefRestitution);
 //
-	setWedgeContacts(wedge4->getContour("Left face"),sideframeL,frictionCoefficient,coefRestitution);
+	setWedgeContacts(wedge4->getContour("Left face"),sideFrameLeft->getContour("Side frame left"),frictionCoefficient,coefRestitution);
 	setWedgeContacts(wedge4->getContour("Right face"),bolster->getContour("Contact plane left"),
 			frictionCoefficient,coefRestitution);
 }
@@ -523,8 +550,8 @@ void BarberTruck::setWedgeContacts(Contour *wedgeFace,
 				otherFace );
 		contact->setNormalForceLaw ( new UnilateralConstraint() );
 		contact->setNormalImpactLaw ( new UnilateralNewtonImpact ( coefRestitution ) );
-		contact->setTangentialImpactLaw ( new PlanarCoulombImpact ( frictionCoefficient ) );
-		contact->setTangentialForceLaw ( new PlanarCoulombFriction ( frictionCoefficient ) );
+//		contact->setTangentialImpactLaw ( new SpatialCoulombImpact ( frictionCoefficient ) );
+		contact->setTangentialForceLaw ( new SpatialCoulombFriction ( frictionCoefficient ) );
 		contact->setPlotFeature("generalizedForce",enabled);
 		contact->setPlotFeature("generalizedRelativePosition",enabled);
 		addLink(contact);
