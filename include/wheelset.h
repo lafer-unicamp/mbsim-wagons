@@ -13,6 +13,7 @@
 #include "mbsim/frames/fixed_relative_frame.h"
 #include "openmbvcppinterface/rotation.h"
 #include "openmbvcppinterface/compoundrigidbody.h"
+#include "openmbvcppinterface/ivbody.h"
 
 class Wheelset : public MBSim::RigidBody
 {

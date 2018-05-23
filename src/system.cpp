@@ -110,7 +110,7 @@ System::System(const string& projectName, const string& inputFileName) :
 	//	/// ----------------- TRUCKS ------------------------------------------------
 	Vec3 position(3, INIT, 0.0);
 	position(0) = -truckBaseDistance / 2;
-	BarberTruck *frontTruck = new BarberTruck("Front truck", bolsterBushing);
+	BarberTruck *frontTruck = new BarberTruck("Front truck", bolsterBushing, truckWheelBase);
 	frontTruck->addFrame(new FixedRelativeFrame("FT_RefFrame",position,
 			SqrMat(3,EYE)));
 	this->addGroup(frontTruck);

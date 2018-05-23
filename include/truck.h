@@ -10,6 +10,8 @@
 
 #include "mbsim/group.h"
 #include "wedge.h"
+#include "wheelset.h"
+#include "sideframe.h"
 
 class Truck : public MBSim::Group
 {

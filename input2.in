@@ -1,5 +1,5 @@
 %======================== OVERALL CONTROLS ===================================%
-SIMULATION_TIME=2
+SIMULATION_TIME=0.01
 TIME_STEP=1e-5
 SYSTEM_NAME=test
 %======================== MOTION INPUT =======================================%
@@ -8,7 +8,7 @@ FREQUENCY=10
 MOVEMENT_DELAY=0.1
 %======================== WAGON DATA =========================================%
 CAR_WHEEL_BASE=14.622
-TRUCK_WHEEL_BASE=1.84
+TRUCK_WHEEL_BASE=1.829
 BOX_MASS=13344
 BOX_Ixx=52800.0
 BOX_Iyy=1284000.0

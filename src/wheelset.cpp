@@ -23,6 +23,15 @@ Wheelset::Wheelset(const std::string& name,
 	pos(2) = -pos(2);
 	this->addFrame ( new MBSim::FixedRelativeFrame ( "SFR",pos,fmatvec::SqrMat ( 3,fmatvec::EYE ) ) );
 
+
+	//3D visualization
+	std::shared_ptr<OpenMBV::IvBody> cad=OpenMBV::ObjectFactory::create<OpenMBV::IvBody>();
+	cad->setIvFileName("wrl/wheelset.wrl");
+	cad->setScaleFactor(1.0);
+	cad->setInitialRotation(3*M_PI/2,0,M_PI/2);
+	cad->setInitialTranslation(0,0.0,0);
+	this->setOpenMBVRigidBody(cad);
+
 }
 
 void Wheelset::enableOpenMBV()

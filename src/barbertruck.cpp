@@ -21,10 +21,10 @@
 #include <barbertruck.h>
 
 BarberTruck::BarberTruck( const std::string& projectName ): Truck(projectName) {
-	BarberTruck (projectName,false);
+	BarberTruck (projectName,false, 2.0);
 };
 
-BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) : Truck(projectName), wheelBase(2.5), bolsterWithBushings(withBushings)
+BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings, double _wBase ) : Truck(projectName), wheelBase(_wBase), bolsterWithBushings(withBushings)
 {
 	setModelType("Barber");
 	/// -------------------------- SYSTEM PARAMETERS --------------------------
@@ -46,7 +46,7 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 	double wedgeDepth = 0.12; // [m]
 	double wedgeSpringStiffness = 240000; // [N/m]
 	double wedgeSpringFreeLength = 0.2544; // [m]
-	double wheelBase = 1.725;
+	double wheelBase = 1.829;
 	// double wheelRadius = 0.45;
 	// side frame mass properties are doubled to represent both sides of the truck
 	double sideFrameHeight = .495; // [m]
@@ -266,12 +266,12 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings ) :
 	wheelRear->setFrameOfReference(this->getFrame("RWS"));
 	wheelRear->setFrameForKinematics(wheelRear->getFrameC());
 	wheelRear->setMass(2000);
-	wheelRear->enableOpenMBV();
+	//wheelRear->enableOpenMBV();
 
 	wheelFront->setFrameOfReference(this->getFrame("FWS"));
 	wheelFront->setFrameForKinematics(wheelFront->getFrameC());
 	wheelFront->setMass(2000);
-	wheelFront->enableOpenMBV();
+	//wheelFront->enableOpenMBV();
 
 	/// ---------------- DEFINITION OF JOINTS -----------------------------------
 	/// TODO MOMENTS MOMENTS MOMENTS

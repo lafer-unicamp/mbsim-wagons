@@ -72,7 +72,7 @@ class BarberTruck : public Truck
 {
 public:
 	BarberTruck ( const std::string& projectName );
-	BarberTruck ( const std::string& projectName, bool withBushings );
+	BarberTruck ( const std::string& projectName, bool withBushings, double _wBase );
 
 	Wedge* wedge1;
 	Wedge* wedge2;
