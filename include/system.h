@@ -37,6 +37,7 @@
 #include "mbsim/links/contact.h"
 #include "mbsim/constitutive_laws/constitutive_laws.h"
 #include "mbsim/functions/sinusoidal_function.h"
+#include "mbsim/utils/rotarymatrices.h"
 
 #include "openmbvcppinterface/coilspring.h"
 #include "openmbvcppinterface/cuboid.h"
@@ -60,6 +61,7 @@ using namespace std;
 #include "wheelset.h"
 #include "sinusoidalmovement.h"
 #include "inputTools.h"
+#include "jointFactory.h"
 /*
  * This object is not included in the mbsim 11.0 official distribution,
  * so it was added individually
@@ -82,12 +84,14 @@ private:
   double amplitude;	// movement amplitude [m]
   double freq;	// movement angular speed [rad/s]
   double t0;	// movement delay to enter [s]
+  double period; // movement duration
   double truckBaseDistance; // car wheel base [m]
   double truckWheelBase; // truck wheel base [m]
   double wagonMass; // wagon box mass [kg]
   double fillRatio; // amount of fluid in the box for the case of liquid cargo [0-1]
   fmatvec::SymMat wagonInertiaTensor; // [kg.m^2]
   bool bolsterBushing; // whether the bolster connections are modelled using 3d-stiffness
+  double trainSpeed; // train initial speed in km/h
   
   /// \brief Get input data from text file
   /// \param inputFileName string containing the name of the input file

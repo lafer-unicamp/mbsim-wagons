@@ -32,6 +32,13 @@ public:
   setTotalMass(double totalMass);
 
   /**
+   * Overloaded function to set inertia tensor of the box
+   * @param _I inertia tensor
+   */
+  void
+  setInertiaTensor(fmatvec::SymMat3 _I ) { this->wagonbox->setInertiaTensor(_I);}
+
+  /**
    * Sets the geometryReferenceFrame relative position
    * @param x_, y_, z_ position components on a Cartesian frame
    * @param pos_ position vector on a Cartesian frame
@@ -108,6 +115,9 @@ public:
   {
     return wagonbox;
   }
+
+  MBSim::Frame *getFrontConnectionFrame (){ return this->wagonbox->getFrame("FBC");}
+  MBSim::Frame *getRearConnectionFrame (){ return this->wagonbox->getFrame("RBC");}
 
 protected:
   MBSim::RigidBody* wagonbox;

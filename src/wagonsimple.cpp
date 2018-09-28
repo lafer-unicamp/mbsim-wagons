@@ -7,10 +7,17 @@
 
 #include "wagonsimple.h"
 
+using namespace MBSim;
+using namespace fmatvec;
+
 WagonSimple::WagonSimple(const std::string& name) :
     WagonGroup(name)
 {
   wagonbox = new MBSim::RigidBody("Wagon box");
+  wagonbox->setTranslation(new LinearTranslation<VecV> ("[1,0,0;0,1,0;0,0,1]"));
+  wagonbox->setRotation( new RotationAboutAxesXYZ<VecV>());
+  wagonbox->setFrameForKinematics(wagonbox->getFrame("C"));
+  wagonbox->setFrameOfReference(this->getFrame("I"));
   this->addObject(wagonbox);
 
   geometryReferenceFrame = new MBSim::FixedRelativeFrame("GF",
@@ -22,6 +29,7 @@ WagonSimple::WagonSimple(const std::string& name) :
       fmatvec::Vec3(fmatvec::INIT, 0.0), fmatvec::SqrMat(3, fmatvec::EYE),
       wagonbox->getFrameC());
   wagonbox->addFrame(frontBolsterConnection);
+  frontBolsterConnection->enableOpenMBV();
 
   rearBolsterConnection = new MBSim::FixedRelativeFrame("RBC",
       fmatvec::Vec3(fmatvec::INIT, 0.0), fmatvec::SqrMat(3, fmatvec::EYE),

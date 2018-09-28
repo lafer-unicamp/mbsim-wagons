@@ -33,7 +33,10 @@ Bolster::Bolster(const std::string& name) : RigidBody(name), angle1Radians(0.0),
 	// Wagon connection point frame initialization
 	wagonConnectionPointPosition.resize(3);
 	wagonConnectionPointPosition.init(0.0);
-	wagonConnectionFrame = new MBSim::FixedRelativeFrame("WCP",wagonConnectionPointPosition,fmatvec::SqrMat(3,fmatvec::EYE),this->getFrame("GR"));
+	wagonConnectionFrame = new MBSim::FixedRelativeFrame("WCP",
+			wagonConnectionPointPosition,
+			fmatvec::SqrMat(3,fmatvec::EYE),
+			this->getFrame("GR"));
 	this->addFrame(wagonConnectionFrame);
 
 	// Initialize contact planes

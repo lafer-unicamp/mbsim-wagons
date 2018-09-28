@@ -1,20 +1,22 @@
 %======================== OVERALL CONTROLS ===================================%
-SIMULATION_TIME=0.01
+SIMULATION_TIME=20
 TIME_STEP=1e-5
+OUTPUT_FREQHZ=250
 SYSTEM_NAME=test
 %======================== MOTION INPUT =======================================%
-AMPLITUDE=0.01
-FREQUENCY=10
-MOVEMENT_DELAY=0.1
+AMPLITUDE=0.030
+FREQUENCY=3.34
+MOVEMENT_DELAY=12.6
+INITIAL_TRAIN_VELOCITY=60
 %======================== WAGON DATA =========================================%
-CAR_WHEEL_BASE=14.622
-TRUCK_WHEEL_BASE=1.829
-BOX_MASS=13344
+CAR_WHEEL_BASE=5.41
+TRUCK_WHEEL_BASE=1.828
+BOX_MASS=21000
 BOX_Ixx=52800.0
 BOX_Iyy=1284000.0
 BOX_Izz=25931.02
 FILL_RATIO=1.0
 WAGON_TYPE=0
 %===================== OTHER CONTROLS ========================================%
-FRICTION_COEFF=0.12
+FRICTION_COEFF=0.2
 BOLSTER_BUSHINGS=1
