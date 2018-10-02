@@ -63,7 +63,7 @@ int main(int argc, char** argv)
  integrator.setEndTime(endTime);
  integrator.setPlotStepSize(1/outputFrequencyInHertz);
 // integrator.setStepSize(timeStep);
- integrator.setStepSizeMax(1e-4);
+ integrator.setStepSizeMax(5e-4);
  integrator.setStepSizeMin(1e-10);
  integrator.integrate(*sys1);
  cout << "finished" << endl;

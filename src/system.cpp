@@ -152,17 +152,21 @@ System::System(const string& projectName, const string& inputFileName) :
 
 	/// ----------- Center plates ---------------------------
 	SymMatV centerPlateStiffness(6,INIT,0.0);
-	centerPlateStiffness(0,0) = 175.130e6;
-	centerPlateStiffness(2,2) = 175.130e6;
-	centerPlateStiffness(1,1) = 875.634e6;
-	centerPlateStiffness(3,3) = 875.634e6 * 0.33 / 4;
-	centerPlateStiffness(5,5) = 875.634e6 * 0.33 / 4;
+	centerPlateStiffness(0,0) = 175.130e6; // longitudinal
+	centerPlateStiffness(2,2) = 175.130e6; // lateral
+	centerPlateStiffness(1,1) = 875.634e6; // vertical
+	centerPlateStiffness(3,3) = 875.634e6 * 0.33 / 4; // roll
+	centerPlateStiffness(5,5) = 875.634e6 * 0.33 / 4; // pitch
+
+	SymMatV centerPlateDamping(6,INIT,0.0);
+	centerPlateDamping = centerPlateStiffness * 0.004;
+	centerPlateDamping(4,4) = 700e3;
 
 	ElasticJoint *frontPlate = new ElasticJoint("Front connection plate");
 	frontPlate->setForceDirection("[1,0,0;0,1,0;0,0,1]");
 	frontPlate->setMomentDirection("[1,0,0;0,1,0;0,0,1]");
 	frontPlate->setGeneralizedForceFunction(
-			new LinearElasticFunction(centerPlateStiffness,0.004*centerPlateStiffness));
+			new LinearElasticFunction(centerPlateStiffness,centerPlateDamping));
 	frontPlate->connect(frontTruck->bolster->getFrame("WCP"),
 			wagon->getFrontConnectionFrame());
 
