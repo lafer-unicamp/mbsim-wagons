@@ -1,20 +1,21 @@
 %======================== OVERALL CONTROLS ===================================%
-SIMULATION_TIME=12
-TIME_STEP=1e-5
+SIMULATION_TIME=0.05
+TIME_STEP=1e-4
 OUTPUT_FREQHZ=250
-SYSTEM_NAME=test_prato_amortecido
+SYSTEM_NAME=teste_perfil
 %======================== MOTION INPUT =======================================%
 AMPLITUDE=0.030
 FREQUENCY=3.34
-MOVEMENT_DELAY=2.6
+MOVEMENT_DELAY=22.6
+MOVEMENT_TEND=0
 INITIAL_TRAIN_VELOCITY=60
 %======================== WAGON DATA =========================================%
 CAR_WHEEL_BASE=5.41
 TRUCK_WHEEL_BASE=1.828
-BOX_MASS=21000
-BOX_Ixx=52800.0
-BOX_Iyy=1284000.0
-BOX_Izz=25931.02
+BOX_MASS=138547.5
+BOX_Iroll=179997.0
+BOX_Ipitch=942567.5
+BOX_Iyaw=989226.0
 FILL_RATIO=1.0
 WAGON_TYPE=0
 %===================== OTHER CONTROLS ========================================%

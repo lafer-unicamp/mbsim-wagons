@@ -268,7 +268,7 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings, do
 	sideFrameRight->buildContour();
 
 
-	/// ---------------- DEFINITION OF THE WHELLS -------------------------------
+	/// ---------------- DEFINITION OF THE WHEELS -------------------------------
 	Vec3 wheelsetOffset(INIT,0.0);
 	wheelsetOffset(0) = - wheelBase / 2;
 	this->addFrame(
@@ -283,13 +283,11 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings, do
 	wheelRear->setInertiaTensor(wheelsetInertiaTensor);
 	wheelRear->setFrameOfReference(this->getFrame("RWS"));
 	wheelRear->setFrameForKinematics(wheelRear->getFrameC());
-	//wheelRear->enableOpenMBV();
 
 	wheelFront->setMass(wheelsetMass);
 	wheelFront->setInertiaTensor(wheelsetInertiaTensor);
 	wheelFront->setFrameOfReference(this->getFrame("FWS"));
 	wheelFront->setFrameForKinematics(wheelFront->getFrameC());
-	//wheelFront->enableOpenMBV();
 
 	/// ---------------- DEFINITION OF JOINTS -----------------------------------
 	///

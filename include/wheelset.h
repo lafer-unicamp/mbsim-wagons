@@ -14,6 +14,7 @@
 #include "openmbvcppinterface/rotation.h"
 #include "openmbvcppinterface/compoundrigidbody.h"
 #include "openmbvcppinterface/ivbody.h"
+#include "wheel_profile.h"
 
 class Wheelset : public MBSim::RigidBody
 {
@@ -32,6 +33,8 @@ public:
 protected:
 	double track;
 	double sideframeTrack;
+	MBSim::WheelProfile *wheelRight;
+	MBSim::WheelProfile *wheelLeft;
 };
 
 #endif /* WHEELSET_H_ */

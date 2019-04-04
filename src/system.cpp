@@ -127,6 +127,13 @@ System::System(const string& projectName, const string& inputFileName) :
 	//
 	//
 
+
+	/// ----------------------------- RAIL ------------------------------------------
+	///
+	RailProfile *rail = new RailProfile("Rail profile","tr68.dat");
+	rail->enableOpenMBV();
+	addContour(rail);
+
 	/// --------------------------- WAGONBOX ----------------------------------------
 	///
 	WagonSimple *wagon = new WagonSimple("Wagonbox");
@@ -169,10 +176,6 @@ System::System(const string& projectName, const string& inputFileName) :
 			new LinearElasticFunction(centerPlateStiffness,centerPlateDamping));
 	frontPlate->connect(frontTruck->bolster->getFrame("WCP"),
 			wagon->getFrontConnectionFrame());
-
-	//	RotaryJoint *frontPlate = new RotaryJoint("Front connection plate",
-	//			frontTruck->bolster->getFrame("WCP"),
-	//			wagon->getFrontConnectionFrame());
 	addLink(frontPlate);
 
 
@@ -184,31 +187,30 @@ System::System(const string& projectName, const string& inputFileName) :
 			new LinearElasticFunction(centerPlateStiffness,0.004*centerPlateStiffness));
 	rearPlate->connect(rearTruck->bolster->getFrame("WCP"),
 			wagon->getRearConnectionFrame());
-
-//	RotaryJoint *rearPlate = new RotaryJoint("Rear connection plate",
-//			rearTruck->bolster->getFrame("WCP"),
-//			wagon->getRearConnectionFrame());
 	addLink(rearPlate);
 
 
 	/// -------------- MOTION DEFINITION ----------------------------------------
 
 	double tSpeedMeterPerSec = trainSpeed / 3.6;
+	double period = 5/tSpeedMeterPerSec;
+	if (tfinal == 0) period = 1e3;
+	else period = tfinal;
 	// front wheel, front truck = wheel 1
 	frontTruck->wheelFront->setTranslation(new Motion(freq,amplitude,t0,
-			5/tSpeedMeterPerSec,2));
+			period,2));
 	// rear wheel, front truck = wheel2
 	frontTruck->wheelRear->setTranslation(new Motion(freq,amplitude,
 			t0+truckWheelBase/tSpeedMeterPerSec,
-			5/tSpeedMeterPerSec,2));
+			period,2));
 	// front wheel, rear truck = wheel3
 	rearTruck->wheelFront->setTranslation(new Motion(freq,amplitude,
-			t0+(truckBaseDistance-truckWheelBase)/tSpeedMeterPerSec,
-			5/tSpeedMeterPerSec,2));
+			t0+(truckBaseDistance)/tSpeedMeterPerSec,
+			period,2));
 	// rear wheek, rear truck = wheel4
 	rearTruck->wheelRear->setTranslation(new Motion(freq,amplitude,
 			t0+(truckBaseDistance+truckWheelBase)/tSpeedMeterPerSec,
-			5/tSpeedMeterPerSec,2));
+			period,2));
 
 	setPlotFeatureRecursive("generalizedPosition",enabled);
 	setPlotFeatureRecursive("position",enabled);
@@ -233,13 +235,15 @@ System::initializeFromFile(const string& inputFileName)
 	wagonInertiaTensor.resize(3);
 	wagonInertiaTensor.init(fmatvec::EYE);
 	wagonInertiaTensor(0, 0) = atof(
-			searchParameter(inputFileName, "BOX_Ixx").c_str());
+			searchParameter(inputFileName, "BOX_Iroll").c_str());
 	wagonInertiaTensor(1, 1) = atof(
-			searchParameter(inputFileName, "BOX_Iyy").c_str());
+			searchParameter(inputFileName, "BOX_Iyaw").c_str());
 	wagonInertiaTensor(2, 2) = atof(
-			searchParameter(inputFileName, "BOX_Izz").c_str());
+			searchParameter(inputFileName, "BOX_Ipitch").c_str());
 
 	t0 = atof(searchParameter(inputFileName, "MOVEMENT_DELAY").c_str());
+
+	tfinal = atof(searchParameter(inputFileName, "MOVEMENT_TEND").c_str());
 
 	trainSpeed = atof(searchParameter(inputFileName, "INITIAL_TRAIN_VELOCITY").c_str());
 

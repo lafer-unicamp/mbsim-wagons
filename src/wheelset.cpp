@@ -14,14 +14,31 @@ Wheelset::Wheelset(const std::string& name) : Wheelset(name, 1.0, 1.0)
 Wheelset::Wheelset(const std::string& name,
 		double _track, double _sfTrack) : MBSim::RigidBody(name), track(_track), sideframeTrack(_sfTrack)
 {
-  // TODO Auto-generated constructor stub
 	fmatvec::Vec3 pos(fmatvec::INIT,0.0);
+	fmatvec::SqrMat3 rot (fmatvec::INIT,0.0);
 
+	double ajusteBitola = -0.097; // TODO gambiarra para acertar a posição das rodas
+
+	// rot = rotation matrix
+	rot(0,0) = 1;
+	rot(1,2) = 1;
+	rot(2,1) = -1;
+
+	// sideframe frames of connection
 	pos(2) = - this->sideframeTrack / 2;
 	this->addFrame ( new MBSim::FixedRelativeFrame ( "SFL",pos,fmatvec::SqrMat ( 3,fmatvec::EYE ) ) );
 
 	pos(2) = -pos(2);
 	this->addFrame ( new MBSim::FixedRelativeFrame ( "SFR",pos,fmatvec::SqrMat ( 3,fmatvec::EYE ) ) );
+
+	// wheel contour reference frames
+	pos(2) = -this->track / 2 - ajusteBitola;
+	this->addFrame ( new MBSim::FixedRelativeFrame ( "WL",pos,rot ) );
+
+	pos(2) = -pos(2);
+	rot(1,2) = -1;
+	rot(2,1) = 1;
+	this->addFrame ( new MBSim::FixedRelativeFrame ( "WR",pos,rot ) );
 
 
 	//3D visualization
@@ -32,19 +49,29 @@ Wheelset::Wheelset(const std::string& name,
 	cad->setInitialTranslation(0,0.0,0);
 	this->setOpenMBVRigidBody(cad);
 
+
+	wheelRight = new MBSim::WheelProfile("Roda direita","roda.dat",getFrame("WR"));
+	wheelRight->enableOpenMBV();
+
+	wheelLeft = new MBSim::WheelProfile("Roda esquerda","roda.dat",getFrame("WL"));
+	wheelLeft->enableOpenMBV();
+
+	addContour(wheelRight);
+	addContour(wheelLeft);
+
 }
 
 void Wheelset::enableOpenMBV()
 {
 	std::shared_ptr<std::vector<std::shared_ptr<OpenMBV::PolygonPoint>>> points =
 					std::make_shared<std::vector<std::shared_ptr<OpenMBV::PolygonPoint>>>();
-  points->push_back(OpenMBV::PolygonPoint::create(.1,-0.067,0.));
+  points->push_back(OpenMBV::PolygonPoint::create(.0,-0.067,0.));
   points->push_back(OpenMBV::PolygonPoint::create(.4344,-0.067,0.));
   points->push_back(OpenMBV::PolygonPoint::create(.4572,0.0,0.));
   points->push_back(OpenMBV::PolygonPoint::create(.4593,0.043,0.));
   points->push_back(OpenMBV::PolygonPoint::create(.4824,0.043,0.));
   points->push_back(OpenMBV::PolygonPoint::create(.4824,0.077,0.));
-  points->push_back(OpenMBV::PolygonPoint::create(.1,0.077,0.));
+  points->push_back(OpenMBV::PolygonPoint::create(.0,0.077,0.));
 
   std::shared_ptr<OpenMBV::Rotation> openMBVwheel1 =
   				OpenMBV::ObjectFactory::create<OpenMBV::Rotation>();
@@ -75,5 +102,5 @@ void Wheelset::enableOpenMBV()
   openMBVwheelset->addRigidBody(openMBVwheel2);
   openMBVwheelset->addRigidBody(openMBVshaft);
 //
-  this->setOpenMBVRigidBody(openMBVwheelset);
+  this->setOpenMBVRigidBody(openMBVshaft);
 }
