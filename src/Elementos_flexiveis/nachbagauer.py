@@ -16,8 +16,10 @@ Created on Thu May 13 14:49:04 2021
 
 import numpy as np
 
-from numpy.matlib import matrix, block, eye, zeros
+from numpy.matlib import matrix, block, eye, zeros, square
 from numpy.linalg import norm, inv, det
+from scipy.optimize import newton_krylov, anderson, fsolve, broyden1
+import matplotlib.pyplot as plt
 
 class node(object):
     """
@@ -43,7 +45,7 @@ class node(object):
         return self._q
     @q.setter
     def q(self,dofMatrix):
-        self._q = dofMatrix
+        self._q = dofMatrix.reshape(1,-1)
         
     @property
     def qtotal(self):
@@ -148,6 +150,14 @@ class flexibleBody(object):
         self.elementList = []
         
         
+    @property 
+    def mass(self):
+        mass = 0.0
+        for e in self.elementList:
+            mass += e.mass
+            
+        return mass
+        
     def assembleFEProblem(self):
         self.assembleMassMatrix()
         
@@ -156,16 +166,81 @@ class flexibleBody(object):
         ned = 4             # element degrees of freedom
         nel = len(self.elementList)
         
+        M = zeros([ned * (nel + 1), ned * (nel + 1)])
         
+        i = 0
+        for elem in self.elementList:
+            dofstart = ned * i
+            dofend = dofstart + 2 * ned
+            M[dofstart:dofend, dofstart:dofend] += elem.getMassMatrix()
+            i += 1
+            
+        return M
+    
+    
+    def assembleElasticForceVector(self):
+        ned = 4             # element degrees of freedom
+        nel = len(self.elementList)
         
+        Qe = zeros(ned * (nel + 1))
         
+        i = 0
+        for elem in self.elementList:
+            dofstart = ned * i
+            dofend = dofstart + 2 * ned
+            Qe[0,dofstart:dofend] += elem.getNodalElasticForces().reshape(1,-1)
+            i += 1
+            
+        return Qe.reshape(-1,1)
+    
+    def assembleWeightVector(self, g):
+        ned = 4             # element degrees of freedom
+        nel = len(self.elementList)
         
+        Qg = zeros(ned * (nel + 1))
+        
+        i = 0
+        for elem in self.elementList:
+            dofstart = ned * i
+            dofend = dofstart + 2 * ned
+            Qg[0,dofstart:dofend] += elem.getWeightNodalForces(g).reshape(1,-1)
+            i += 1
+            
+        return Qg.reshape(-1,1)
         
     
     def addElement(self, element):
+        '''
+        
+
+        Parameters
+        ----------
+        element : ELEMENT
+            Element object to be added to elementList.
+
+        Returns
+        -------
+        None.
+
+        '''
         for el in element:
             el.parentBody = self
         self.elementList.extend(element)
+        
+    def plot(self, pointsPerElement = 5):
+        points = np.linspace(-1.,1.,pointsPerElement)
+        
+        xy = np.empty([0,2])
+        
+        for ele in self.elementList:
+            for i in range(pointsPerElement):
+                xy = np.append(xy,ele.interpolatePosition(points[i],0),axis=0)
+                
+                
+        plt.plot(xy[:,0],xy[:,1],'-o')
+        
+        return xy
+        
         
         
         
@@ -193,6 +268,7 @@ class elementLinear(element):
     def __init__(self, node1, node2, height):
         self.length = norm(node1.qtotal[0:2] - node2.qtotal[0:2])
         self.height = height
+        self.width = 1.0
         self.nodes = [node1,node2]
         
         # L = self.length
@@ -228,6 +304,10 @@ class elementLinear(element):
     @property
     def q0(self):
         return block([self.nodes[0].q0, self.nodes[1].q0])
+    
+    @property
+    def mass(self):
+        return self.length * self.height * self.width * self.parentBody.material.rho
         
         
     def interpolatePosition(self,xi_, eta_):
@@ -235,7 +315,10 @@ class elementLinear(element):
         Returns the interpolated position given the non-dimensional parameters
         xi_ and eta_. Notice that xi_ and eta_ range from -1 to 1.
         """
-        return self.shapeFunctionMatrix(xi_ ,eta_) * block([[x.nodes[0].qtotal.T],[x.nodes[1].qtotal.T]])
+        
+        r = self.shapeFunctionMatrix(xi_ ,eta_) * block([[self.nodes[0].qtotal.T],[self.nodes[1].qtotal.T]])
+        
+        return r.reshape(1,-1)
 
     def shapeFunctionMatrix(self, xi_, eta_):
 
@@ -290,7 +373,7 @@ class elementLinear(element):
     
     
     def initialJacobian(self,xi_,eta_):
-        q = block([[x.nodes[0].q0.T],[x.nodes[1].q0.T]])
+        q = block([[self.nodes[0].q0.T],[self.nodes[1].q0.T]])
         return self.getJacobian(xi_,eta_,q)
     
     def inverseInitialJacobian(self,xi_,eta_):
@@ -298,7 +381,7 @@ class elementLinear(element):
         return inv(J0)
     
     def currentJacobian(self,xi_,eta_):
-        q = block([[x.nodes[0].qtotal.T],[x.nodes[1].qtotal.T]])
+        q = block([[self.nodes[0].qtotal.T],[self.nodes[1].qtotal.T]])
         return self.getJacobian(xi_,eta_,q)
     
     def getJacobian(self,xi_,eta_,q):
@@ -481,6 +564,7 @@ class elementLinear(element):
         # Gaussian quadrature
         
         for p in range(3):
+            'outer quadrature'
             for b in range(3):
                 'inner quadrature'
                 detJ0 = det(self.initialJacobian(gauss[p], gauss[b]))
@@ -490,7 +574,7 @@ class elementLinear(element):
                     for j in range(2):
                         'tensor product'
                         for m in range(8):
-                            Qe[m,0] = Qe[m,0] + deps_dq[i,j,m]*T[i,j] * detJ0 * w[p] * w[b]
+                            Qe[m,0] += deps_dq[i,j,m]*T[i,j] * detJ0 * w[p] * w[b]
                             
         
         
@@ -500,38 +584,148 @@ class elementLinear(element):
     def getWeightNodalForces(self,grav):
         L = self.length
         H = self.height
-        return L * H * 0.25 * grav * matrix([
+        Qg =  L * H * 0.25 * grav * matrix([
             [2, 0, 0, 0, 2, 0, 0, 0],
             [0, 2, 0, 0, 0, 2, 0, 0]])*eye(8)*self.parentBody.material.rho
+        
+        return Qg.T
 
                             
         
        
                 
-           
+
+
 
 '''
 TEST PROGRAM
 '''
 
 
-steel = linearElasticMaterial('Steel',210e3,0.0,7.85e-6)
+steel = linearElasticMaterial('Steel',210e3,0.00,7.85e-6)
 body = flexibleBody('Bar',steel)
 
 
-n1 = node(0.0,0.0,0.0,1.0)
-n2 = node(10.0,0.0,0.0,1.0)
-n3 = node(20.0,0.0,0.0,1.0)
-x = elementLinear(n1, n2, 1)
-y = elementLinear(n2, n3, 1)
+n = []
+nel = 1
+for i in range(nel+1):
+    n.append(node(10 * i/nel,0.0,0.0,1.0))
 
-body.addElement([x,y])
+
+e = []
+for j in range(len(n)-1):
+    e.append(elementLinear(n[j],n[j+1],1))
+
+
+g = matrix([[9.81,0.0]])
+
+body.addElement(e)
 body.assembleMassMatrix()
+Qe = body.assembleElasticForceVector()
+Qg = body.assembleWeightVector(g)
 # displace node 2
+
+
+# def f(z):
+    
+#     z = matrix(z)
+#     z.reshape(1,-1)
+    
+#     gdl = 0
+#     for node in n:
+#         node.q = matrix(z[0,gdl:gdl+4])
+#         gdl += 4 
+
+    
+#     #bcs
+#     Qg = body.assembleWeightVector(g)   
+#     Qe = body.assembleElasticForceVector()
+    
+#     conDof = [0,1,2,3]
+    
+#     Phi = zeros([len(conDof),gdl])
+    
+#     for d in conDof:
+#         Phi[d,d] = 1
+    
+#     Qbc = Phi.T * z[0,gdl:].T
+    
+#     f = block([[Qe + Qbc + 1000*Qg],[zeros([4,1])]])
+    
+#     return f
+
+dt = 5e-5
+tend = 0.02
+
+#bcs 
+conDof = [0,1,2,3]
+gdl = 4*len(n)
+Phi = zeros([len(conDof),gdl])
+
+for d in conDof:
+    Phi[d,d] = 1
+
+t = []
+tnow = 0
+
+# augmented mass matrix
+
+Ma = block([[body.assembleMassMatrix(),-Phi.T],[Phi,zeros([4,4])]])
+Mainv = inv(Ma)
+
+z = [np.zeros([4*(nel+1)])]
+lam = [np.zeros([4])]
+zdot = z.copy()
+t = [0.]
+
+while tnow <= tend:
+    
+    print('t = {}'.format(tnow))
+    
+    gdl = 0
+    for node in n:
+        node.q = z[-1][gdl:gdl+4]
+        gdl += 4
+    
+    Qeg = body.assembleElasticForceVector()
+    Qgg = body.assembleWeightVector(g)
+    
+    Qgg = 0.0 * Qg
+    Qgg[-3,0] = 1
+    
+    rhs = np.block([[-Qeg+Qgg],[zeros([4,1])]])
+    
+    zkdt2 = np.block([z[-1],zeros([1,4])]) / dt / dt
+    zdkdt = block([zdot[-1],zeros([1,4])]) / dt
+    
+    # NOTE: np.dot is faster than regular multiplication
+    lhs = np.sum([np.dot(Mainv,rhs),zkdt2.T,zdkdt.T],axis=0)
+    
+    lhs = matrix(lhs)
+    
+    z.append(lhs.A1[0:4*(nel+1)] * dt * dt)
+    zdot.append((z[-1]-z[-2])/dt)
+    lam.append(lhs.A1[4*(nel+1):])
+   
+    tnow += dt
+    t.append(tnow)
+    
+    
+
+# z0 = newton_krylov(f, zeros([1,(nel+1)*4 + 4]), maxiter=10,verbose=True)
+
+xy = body.plot()      
+
+z = np.array(z)
+lam = np.array(lam)
+plt.figure()
+plt.subplot(2,1,1)
+plt.plot(t,z[:,4])
+plt.subplot(2,1,2)
+plt.plot(t,lam[:,0])
 
 
 
     
-            
-            
+
             
