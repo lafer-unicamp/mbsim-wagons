@@ -385,6 +385,11 @@ class elementLinear(element):
         # Gauss weights
         w = self.gaussWeights
         
+        # beam geometry
+        L = self.length
+        H = self.height
+        W = self.width
+        
         Qe = zeros([8,1])
         
         # Gaussian quadrature
@@ -405,7 +410,7 @@ class elementLinear(element):
                             
         
         # TODO: check errors here
-        return Qe * self.length * self.height * self.width / 4
+        return Qe * W * L * H / 4
     
     
     def getWeightNodalForces(self,grav):
@@ -429,29 +434,26 @@ TEST PROGRAM
 '''
 
 
-steel = materials.linearElasticMaterial('Steel',207e3,0.3,7.85e-6)
+steel = materials.linearElasticMaterial('Steel',207e9,0.3,7.85e3)
 body = flexibleBody.flexibleBody('Bar',steel)
 
 
 n = []
 nel = 1
-totalLength = 2000.
+totalLength = 2.
 for i in range(nel+1):
     n.append(node(totalLength * i/nel,0.0,0.0,1.0))
 
 
 e = []
 for j in range(len(n)-1):
-    e.append(elementLinear(n[j],n[j+1],500.,100.))
+    e.append(elementLinear(n[j],n[j+1],0.5,0.1))
 
 
 g = matrix([[0.0,-9.81]])
 
 body.addElement(e)
 body.assembleMassMatrix()
-
-Qe = body.assembleElasticForceVector()
-Qg = body.assembleWeightVector(g)
 
 
 # Constraint matrix 
@@ -477,7 +479,7 @@ def f(z):
         
     Qe = body.assembleElasticForceVector()
     Qg = body.assembleWeightVector(g)*0
-    Qg[-3,0] = 500000. * 0.5 * 0.5 * 0.5 
+    Qg[-3,0] = 500000. * 0.5 * 0.5 * 0.5
     
     goal = [0]*((nel+1)*4+4)
     
@@ -492,13 +494,13 @@ def f(z):
 
 z0 = [0]*((nel+1)*4+4)
 z0[-3] = -500000. * 0.5 * 0.5 * 0.5
-z0[-2] = z0[-3] * 2000
+z0[-2] = - z0[-3] * 2
 '''z = opt.newton_krylov(f,
                   z0,
                   maxiter=40,
                   f_tol=1e-4,
                   verbose=True)'''
-z, info, ier, msg = opt.fsolve(f, z0,full_output=True)
+z, info, ier, msg = opt.fsolve(f, z0,full_output=True, xtol=1e-12)
 
 xy = body.plotPositions()
 
