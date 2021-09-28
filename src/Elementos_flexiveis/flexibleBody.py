@@ -35,6 +35,9 @@ class flexibleBody(object):
         self.name = name
         self.material = material
         self.elementList = []
+        self.totalDof = 0   # total number of degrees of freedom
+        
+        print('Created body \'{}\' with material \'{}\''.format(name,material.name))
         
         
     @property 
@@ -49,38 +52,33 @@ class flexibleBody(object):
         self.assembleMassMatrix()
         
     def assembleMassMatrix(self):
+        print('Assemblying mass matrix')
+         
+        M = np.matlib.zeros([self.totalDof, self.totalDof])
         
-        ned = 4             # element degrees of freedom
-        nel = len(self.elementList)
-        
-        M = np.matlib.zeros([ned * (nel + 1), ned * (nel + 1)])
-        
-        i = 0
         for elem in self.elementList:
-            dofstart = ned * i
-            dofend = dofstart + 2 * ned
-            M[dofstart:dofend, dofstart:dofend] += elem.getMassMatrix()
-            i += 1
+            m = elem.getMassMatrix()
+            for dof in elem.globalDof:
+                localDof = elem.globalDof.index(dof)
+                M[dof, dof] += m[localDof,localDof]
             
+        print('Mass matrix assembly done!')
         return M
     
     
     def assembleElasticForceVector(self):
-        ned = 4             # element degrees of freedom
-        nel = len(self.elementList)
         
-        Qe = np.matlib.zeros(ned * (nel + 1))
+        Qe = np.matlib.zeros(self.totalDof)
         
-        i = 0
+        
         for elem in self.elementList:
-            dofstart = ned * i
-            dofend = dofstart + 2 * ned
-            Qe[0,dofstart:dofend] += elem.getNodalElasticForces().reshape(1,-1)
-            i += 1
+            Qelem = elem.getNodalElasticForces().reshape(1,-1)
+            for i,dof in enumerate(elem.globalDof):
+                Qe[0,dof] += Qelem[0,i]
             
         return Qe.reshape(-1,1)
     
-    def assembleWeightVector(self, g):
+    def assembleWeightVector(self, g=np.array([0,1])):
         ned = 4             # element degrees of freedom
         nel = len(self.elementList)
         
@@ -110,9 +108,15 @@ class flexibleBody(object):
         None.
 
         '''
+        curGdl = 0
         for el in element:
             el.parentBody = self
+            for nd in el.nodes:
+                nd.globalDof = list(range(curGdl,curGdl+4))
+                curGdl += 4
+            curGdl = el.globalDof[-1]-3 
         self.elementList.extend(element)
+        self.totalDof = el.globalDof[-1] + 1
         
     def plotPositions(self, pointsPerElement = 5):
         points = np.linspace(-1.,1.,pointsPerElement)
