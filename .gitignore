@@ -28,6 +28,8 @@
 *.la
 *.a
 *.lib
+*.pyc
+*.cpython*
 
 # Executables
 *.exe
@@ -55,6 +57,4 @@
 /build/*
 /bin/*
 /results/*
-*.pyc
-*.pyc
-*.pyc
+*/__pycache__/*

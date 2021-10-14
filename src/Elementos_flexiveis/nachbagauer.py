@@ -236,19 +236,29 @@ class beamANCFelement(object):
         return self.parentBody.material.rho * M * self.length * self.height * self.width / 4
     
     def getTangentStiffnessMatrix(self):
+        '''
+        Finite difference approximation to the tangent stiffness matrix
+
+        Returns
+        -------
+        Kte : Numpy matrix
+            Tangent stiffness matrix.
+
+        '''
         
         ndof = len(self.globalDof)
         
         Kte = np.zeros([ndof,ndof])
         
-        row = 0
+        col = 0
         for nd in self.nodes:
             for i,curDof in enumerate(nd.q):
                 savePos = curDof
-                nd.q[i] += 1e-4
-                Kte[:,row] = self.getNodalElasticForces() * 1e4
+                Q0 = self.getNodalElasticForces()
+                nd.q[i] += 1e-6
+                Kte[:,col] = (self.getNodalElasticForces() - Q0) * 1e6
                 nd.q[i] = savePos
-                row += 1
+                col += 1
                 
         return Kte
                 
