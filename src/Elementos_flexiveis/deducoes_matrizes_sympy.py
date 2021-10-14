@@ -15,10 +15,14 @@ import flexibleBody, materials
 
 
 [xi,eta,L,H] =symbols(['xi','eta','L','H'])
-[q1,q2,q3,q4,q5,q6,q7,q8] = symbols(['q[0\,0]','q[0\,1]','q[0\,2]','q[0\,3]','q[0\,4]','q[0\,5]','q[0\,6]','q[0\,7]'])
+varList = []
+for i in range(12):
+    varList.append('q[{}]'.format(i))
+q = symbols(varList)
+q = Matrix(q)
 [d11,d22,d12,d33] = symbols(['d11','d22','d12','d33'])
 
-q = Matrix([q1,q2,q3,q4,q5,q6,q7,q8])
+
 
 # elemento quadrático
 Sq1 = -2/L**2 * xi * (L/2 - xi)
@@ -37,7 +41,7 @@ S2 = eta * S1
 S3 = (L/2 + xi)
 S4 = eta * S3
 
-S = 1/L * Matrix([[S1,0 ,S2,0 ,S3,0 ,S4,0],
+Sl = 1/L * Matrix([[S1,0 ,S2,0 ,S3,0 ,S4,0],
                        [0 ,S1,0 ,S2,0 ,S3,0 ,S4]])
 
 S = Sq
@@ -45,6 +49,9 @@ Sxxi = diff(S[0,:],xi)
 Sxeta = diff(S[0,:],eta)
 Syxi = diff(S[1,:],xi)
 Syeta = diff(S[1,:],eta)
+
+def J(z):
+    return simplify(Matrix([[Sxxi*z,Sxeta*z],[Syxi*z,Syeta*z]]))
 
 '''
 J = Matrix([[Sxxi*q,Sxeta*q],[Syxi*q,Syeta*q]])

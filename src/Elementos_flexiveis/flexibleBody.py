@@ -47,10 +47,7 @@ class flexibleBody(object):
             mass += e.mass
             
         return mass
-        
-    def assembleFEProblem(self):
-        self.assembleMassMatrix()
-        
+                
     def assembleMassMatrix(self):
         print('Assemblying mass matrix')
          
@@ -58,9 +55,9 @@ class flexibleBody(object):
         
         for elem in self.elementList:
             m = elem.getMassMatrix()
-            for dof in elem.globalDof:
-                localDof = elem.globalDof.index(dof)
-                M[dof, dof] += m[localDof,localDof]
+            for i,dofi in enumerate(elem.globalDof):
+                for j,dofj in enumerate(elem.globalDof):
+                    M[dofi,dofj] += m[i,j]
             
         print('Mass matrix assembly done!')
         return M
@@ -79,19 +76,30 @@ class flexibleBody(object):
         return Qe.reshape(-1,1)
     
     def assembleWeightVector(self, g=np.array([0,1])):
-        ned = 4             # element degrees of freedom
-        nel = len(self.elementList)
+        Qg = np.matlib.zeros(self.totalDof)
         
-        Qg = np.matlib.zeros(ned * (nel + 1))
-        
-        i = 0
         for elem in self.elementList:
-            dofstart = ned * i
-            dofend = dofstart + 2 * ned
-            Qg[0,dofstart:dofend] += elem.getWeightNodalForces(g).reshape(1,-1)
-            i += 1
+            Qelem = elem.getWeightNodalForces(g).reshape(1,-1)
+            for i,dof in enumerate(elem.globalDof):
+                Qg[0,dof] += Qelem[0,i]
             
-        return Qg.reshape(-1,1)
+        return Qg.reshape(1,-1)
+    
+    
+    def assembleTangentStiffnessMatrix(self):
+                         
+        print('Assemblying tangent stiffness matrix')
+         
+        Kt = np.matlib.zeros([self.totalDof, self.totalDof])
+        
+        for elem in self.elementList:
+            ke = elem.getTangentStiffnessMatrix()
+            for i,dofi in enumerate(elem.globalDof):
+                for j,dofj in enumerate(elem.globalDof):
+                    Kt[dofi,dofj] += ke[i,j]
+            
+        print('Tangent stiffness matrix assembly done!')
+        return Kt
         
     
     def addElement(self, element):
@@ -118,7 +126,7 @@ class flexibleBody(object):
         self.elementList.extend(element)
         self.totalDof = el.globalDof[-1] + 1
         
-    def plotPositions(self, pointsPerElement = 5):
+    def plotPositions(self, pointsPerElement = 5, show=False):
         points = np.linspace(-1.,1.,pointsPerElement)
         
         xy = np.empty([0,2])
@@ -127,7 +135,26 @@ class flexibleBody(object):
             for i in range(pointsPerElement):
                 xy = np.append(xy,ele.interpolatePosition(points[i],0),axis=0)
                 
-                
-        plt.plot(xy[:,0],xy[:,1])
+        if show:        
+            plt.plot(xy[:,0],xy[:,1])
+            plt.show()
         
         return xy
+    
+    def updateDisplacements(self,z):
+        '''
+
+        Parameters
+        ----------
+        z : array like
+            New displacements of the nodes.
+
+        Returns
+        -------
+        None.
+
+        '''
+        
+        for ele in self.elementList:
+            for nd in ele.nodes:
+                nd.q = z[nd.globalDof]
