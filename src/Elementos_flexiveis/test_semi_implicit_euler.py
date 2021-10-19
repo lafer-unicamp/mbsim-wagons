@@ -18,42 +18,55 @@ import matplotlib.pyplot as plt
 
 massa1 = 1.0
 massa2 = 1.0
+massa3 = 10.0
 
 def spring(x,u=0):
     
-    f1 = - 30. * x[0] + 10. * (x[1] - x[0])
-    f2 = - 10. * (x[1] - x[0])
+    fmola1 = 30. * x[0]
+    fmola2 = 10. * (x[1] - x[0])
+    fmola3 = 10. * (x[2] - x[1])
     
-    return np.array([f1,f2])
+    famort1 = 4. * u[0]
+    
+    f1 = - fmola1 + fmola2 - famort1
+    f2 = - fmola2 + fmola3
+    f3 = - fmola3
+    
+    return np.array([f1,f2,f3])
 
 
 dt = 0.5e-3
-tf = 3.
+tf = 10.
 
 t = [0]
 q = []
 u = []
 
-q0 = np.array([0.,1.])
-u0 = np.array([0.,0.])
+q0 = np.array([0.,0.,0.])
+u0 = np.array([0.,3.,0.])
 
 q.append(q0)
 u.append(u0)
 
     
-def evaluateJacobian(function,x0,parameter):
+def evaluateJacobian(function,x0,xdot0=0,parameter=0):
     
-    f0 = function(x0)
+    f0 = function(x0,xdot0)
     
     J = np.zeros([f0.shape[0],len(x0)])
     
+    if parameter == 0:
+        q = x0
+    else:
+        q = xdot0
+    
     for i,col in enumerate(J.T):
-        x0save = x0[i]
-        x0[i] += 1e-6
+        qsave = q[i]
+        q[i] += 1e-6
         
-        col[:] = (function(x0) - f0) * 1e6
+        col[:] = (function(x0,xdot0) - f0) * 1e6
         
-        x0[i] = x0save
+        q[i] = qsave
         
     return J
         
@@ -77,45 +90,57 @@ def integrateEulerSemiImplicit(q0,u0,dt,M,extForce,Phi,tfinal):
     u.append(u0)
     lam.append(np.zeros(ncons))
     
+    Jq = evaluateJacobian(extForce,q[-1],u[-1],0)
+    Ju = evaluateJacobian(extForce,q[-1],u[-1],1)
+    
     while t[-1] <= tfinal:
         
-        Jq =  evaluateJacobian(extForce,q[-1],0)
         
         # explicit update for positions
-        q.append(q[-1] + dt*u[-1])
+        deltaq = dt*u[-1]
+        q.append(q[-1] + deltaq)
         
-        
-        LHS[0:ndof,0:ndof] = M - dt * dt * Jq
+        # assemble implicit problem
+        LHS[0:ndof,0:ndof] = M - dt * Ju - dt * dt * Jq
         LHS[0:ndof,ndof:] = Phi.T
         LHS[ndof:,0:ndof] = Phi
         
-        RHS[0:ndof] = dt * extForce(q[-1]) + dt * dt * np.dot(Jq,u[-1])
+        RHS[0:ndof] = dt * extForce(q[-1],u[-1]) + dt * dt * np.dot(Jq,u[-1])
         RHS[ndof:] = -np.dot(Phi,u[-1])
         
         incr = np.linalg.solve(LHS,RHS)
         du = incr[0:ndof]
         lam.append(incr[ndof:])
         
+        
         # implicit update for velocities
         u.append(u[-1] + du)
+        
+        # jacobian update using Broyden's method
+        #Jq += (extForce(q[-1],u[-1]) - extForce(q[-2],u[-2]) - np.dot(Jq,deltaq)) / (np.dot(deltaq,deltaq)) * deltaq.T
+        #Ju += (extForce(q[-1],u[-1]) - extForce(q[-2],u[-2]) - np.dot(Ju,du)) / (np.dot(du,du)) * du.T
         
         t.append(t[-1] + dt)
         
     return t,q,u,lam
     
-M = np.diag([massa1,massa2])
+M = np.diag([massa1,massa2,massa3])
     
-t,q,u,lam = integrateEulerSemiImplicit(q0, u0, dt, M, spring, np.matrix([[0,1]]), tf)
+t,q,u,lam = integrateEulerSemiImplicit(q0, u0, dt, M, spring, np.matrix([[0,0,1]]), tf)
     
-plt.subplot(3,1,1)
+plt.subplot(3,2,1)
 plt.plot(t,q)
 plt.ylabel('x')
-plt.subplot(3,1,2)
+plt.subplot(3,2,2)
 plt.plot(t,u)
 plt.ylabel('v')
-plt.subplot(3,1,3)
+plt.legend(['massa 1','massa 2','massa 3'])
+plt.subplot(3,2,3)
 plt.plot(t,lam)
 plt.ylabel('force')
+plt.subplot(3,2,4)
+plt.plot(t,np.asarray(q)[:,2])
+plt.ylabel('constraint violation')
 
     
     

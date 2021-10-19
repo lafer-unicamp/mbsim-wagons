@@ -17,15 +17,15 @@ np.seterr('raise')
 TESTE DOS ELEMENTOS EM BIELA MANIVELA
 '''
 
-steel = linearElasticMaterial('Steel',207e6,0.3,7.85e3)
+steel = linearElasticMaterial('Steel',207e9,0.3,7.85e3)
 penA = flexibleBody('Pêndulo A',steel)
 penB = flexibleBody('Pêndulo B',steel)
 
-LpenA = 100.0e-3
-LpenB = 400.0e-3
+LpenA = 150.0e-3
+LpenB = 300.0e-3
 
-altura = 20.0e-3
-largura = 30.0e-3
+altura = 6.0e-3
+largura = 6.0e-3
 
 g = [0,-9.810]
 
@@ -87,8 +87,8 @@ def updatePhi():
 
 
 '''SOLVER'''
-finalTime = 1.0
-h = 5e-5 # timestep
+finalTime = 1.0/150
+h = 5e-7 # timestep
 t = [0]
 
 #LHS matrix
@@ -133,7 +133,7 @@ print('##\nStarting simulation for {} s with timestep {} s\n##'.format(finalTime
 def getForces(body):
     return (-body.assembleElasticForceVector().A1)
 
-omega = 10
+omega = 150
 
 while t[-1] < finalTime:
     t.append(t[-1] + h)
