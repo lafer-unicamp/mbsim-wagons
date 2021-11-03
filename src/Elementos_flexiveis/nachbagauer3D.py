@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Implementation of the planar beam in 
+Extrapolation to 3D based on the planar beam from
 K. Nachbagauer, A. Pechstein, H. Irschik, e J. Gerstmayr, “A new locking-free 
 formulation for planar, shear deformable, linear and quadratic 
 beam finite elements based on the absolute nodal coordinate formulation”, 
@@ -9,7 +9,7 @@ Multibody System Dynamics, vol. 26, no 3, p. 245–263, 2011,
 doi: 10.1007/s11044-011-9249-8.
 
 
-Created on Thu May 13 14:49:04 2021
+Created on Mon Nov 1 15:42:00 2021
 
 @author: Leonardo Bartalini Baruffaldi
 """
@@ -22,26 +22,24 @@ from numpy.linalg import norm, inv
 
 
 
-#import flexibleBody
-#import materials
-
-
 class node(object):
     """
-    finite element node with four dof
+    finite element node with six dof
     
     Parameters
     __________
         u1 - reference coordinate x
         u2 - reference coordinate y
+        u3 - referemce coordinate z
         up1 - reference slope relative to x
         up2 - reference slope relative to y
+        up3 - reference slope relative to z
     """
     
-    def __init__(self, u1=0., u2=0., up1 = 0., up2 = 1.):
-        self.q0 = [u1,u2,up1,up2]
-        self.q = [0.0]*4
-        self.globalDof = [0,1,2,3]
+    def __init__(self, u1=0., u2=0., u3=0., up1 = 0., up2 = 1., up3 = 1.):
+        self.q0 = [u1,u2,u3,up1,up2,up3]
+        self.q = [0.0]*len(self.q0)
+        self.globalDof = [i for i in range(len(self.q0))]
         
             
         
@@ -52,7 +50,6 @@ class node(object):
     @q.setter
     def q(self,dofMatrix):
         self._q = dofMatrix
-        #self.qtotal = np.array(dofMatrix) + np.array(self.q0)
         
     def updateqTotal(self):
         self.qtotal = np.array(self.q, dtype=np.float64) + np.array(self.q0, dtype=np.float64)
@@ -61,22 +58,16 @@ class node(object):
     @property
     def qtotal(self):
         """nodal displacement relative to global frame"""
-        return np.array(self.q) + np.array(self.q0)
-
-
-    
-        
-        
-        
-        
-        
-         
+        return np.array(self.q,dtype=np.float64()) + np.array(self.q0,dtype=np.float64())
+  
 
     
 ########################################
-class beamANCFelement(object):
+class beamANCFelement3D(object):
     '''
-    Base class for finite elements
+    Base class for three-dimensional beam finite elements
+    
+    TODO Make width depend on height to input rail profiles
     '''
     def __init__(self):
         self.parentBody = None
@@ -140,18 +131,18 @@ class beamANCFelement(object):
     def mass(self):
         return self.length * self.height * self.width * self.parentBody.material.rho
     
-    def interpolatePosition(self,xi_, eta_):
+    def interpolatePosition(self,xi_, eta_, zeta):
         """
         Returns the interpolated position given the non-dimensional parameters
-        xi_ and eta_. Notice that xi_ and eta_ range from -1 to 1.
+        xi_, eta_, and zeta_ in [-1,1]
         """
         
-        r = dot(self.shapeFunctionMatrix(xi_ ,eta_), self.qtotal)
+        r = dot(self.shapeFunctionMatrix(xi_ ,eta_, zeta), self.qtotal)
         
         return r.reshape(1,-1)
     
     
-    def getJacobian(self,xi_,eta_,q=None):
+    def getJacobian(self,xi_,eta_,zeta_,q=None):
         '''
         
 
@@ -161,27 +152,53 @@ class beamANCFelement(object):
             1st ELEMENT INSTRINSIC COORDINATE [-1,1].
         eta_ : DOUBLE
             2nd ELEMENT INSTRINSIC COORDINATE [-1,1].
+        zeta_ : DOUBLE
+            3rd ELEMENT INSTRINSIC COORDINATE [-1,1].
         q : VECTOR DOUBLE
             NODAL COORDINATES.
 
         Returns
         -------
         BLOCK MATRIX
-            JACOBIAN CALCULATED AT xi_, eta_, under coordinates q.
+            JACOBIAN CALCULATED AT (xi_, eta_,zeta_) under coordinates q.
 
         '''
         
         if q == None:
             q = self.qtotal
   
-        dSx_dxi, dSx_deta, dSy_dxi, dSy_deta = self.shapeFunctionDerivative(xi_,eta_)
+        '''
+        Shape function derivatives
+        dS<i><j> = dSX_i / dxi_j
+        with X_i  in [x,y,z]
+             xi_j in [xi_,eta_,zeta_]
+        '''
+        dSx1, dSx2, dSx3, dSy1, dSy2, dSy3, dSz1, dSz2, dSz3 = self.shapeFunctionDerivative(xi_,eta_)
         
         
-        M1 = dot([[dSx_dxi,dSx_deta],[dSy_dxi,dSy_deta]],q)
+        M1 = dot([[dSx1, dSx2, dSx3],[dSy1, dSy2, dSy3],[dSz1, dSz2, dSz3]],q)
 
         return np.asmatrix(M1)
     
     def saveInitialJacobian(self):
+        '''
+        Saves the initial jacobian on the domain edges so it does not need to
+        be recomputed everytime
+
+        Returns
+        -------
+        jaco : list of arrays
+            list with the values of J0 at the domain boundaries.
+        invJaco : list of arrays
+            list with J0 inverses.
+        detJaco : list of arrays
+            list with J0 determinants.
+        constant : boolean
+            True when the Jacobian is constant.
+
+        '''
+        
+        constant = np.bool8(False)
         
         jaco = []       
         
@@ -208,15 +225,15 @@ class beamANCFelement(object):
         return J,detJ,invJ
 
     
-    def initialJacobian(self,xi_,eta_):
-        return self.getJacobian(xi_,eta_,self.q0)
+    def initialJacobian(self,xi_,eta_,zeta_):
+        return self.getJacobian(xi_,eta_,zeta_,self.q0)
     
-    def inverseInitialJacobian(self,xi_,eta_):
-        J0 = self.initialJacobian(xi_,eta_)
+    def inverseInitialJacobian(self,xi_,eta_,zeta_):
+        J0 = self.initialJacobian(xi_,eta_,zeta_)
         return inv(J0)
     
-    def currentJacobian(self,xi_,eta_):
-        return self.getJacobian(xi_,eta_,self.qtotal)
+    def currentJacobian(self,xi_,eta_,zeta_):
+        return self.getJacobian(xi_,eta_,zeta_,self.qtotal)
     
     def getMassMatrix(self):
         
@@ -231,13 +248,14 @@ class beamANCFelement(object):
         
         for i in range(npoints):
             for j in range(npoints):
-                S = self.shapeFunctionMatrix(gauss[i],gauss[j])
-                M = M + S.T*S * w[i] * w[j]
+                for k in range(npoints):
+                    S = self.shapeFunctionMatrix(gauss[i],gauss[j],gauss[k])
+                    M += S.T*S * w[i] * w[j] * w[k]
                 
-        """we have to multiply by the length and height because
+        """we have to multiply by the dimensions because
         calculations are carried out on non-dimensional coordinates [-1,1]
         """        
-        return self.parentBody.material.rho * M * self.length * self.height * self.width / 4
+        return self.parentBody.material.rho * M * self.length * self.height * self.width / 8
     
     def getTangentStiffnessMatrix(self):
         '''
@@ -270,8 +288,8 @@ class beamANCFelement(object):
                 
     
     
-    def stressTensorByPosition(self,xi_,eta_,split=True):
-        return self.parentBody.material.stressTensor(self.strainTensor(xi_, eta_),split)
+    def stressTensorByPosition(self,xi_,eta_,zeta_,split=True):
+        return self.parentBody.material.stressTensor(self.strainTensor(xi_, eta_,zeta_),split)
     
     def strainTensor(self,xi_,eta_,q=None):
         '''

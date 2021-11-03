@@ -63,15 +63,18 @@ class flexibleBody(object):
         return M
     
     
-    def assembleElasticForceVector(self):
+    def assembleElasticForceVector(self,targetDof = None):
         
         Qe = np.matlib.zeros(self.totalDof)
         
-        
         for elem in self.elementList:
-            Qelem = elem.getNodalElasticForces().reshape(1,-1)
+            if elem.changedStates:
+                Qelem = elem.getNodalElasticForces()
+            else:
+                #Qelem = elem.nodalElasticForces
+                Qelem = elem.getNodalElasticForces()
             for i,dof in enumerate(elem.globalDof):
-                Qe[0,dof] += Qelem[0,i]
+                Qe[0,dof] += Qelem[i]
             
         return Qe.reshape(-1,1)
     
@@ -86,6 +89,7 @@ class flexibleBody(object):
         return Qg.reshape(1,-1)
     
     
+
     def assembleTangentStiffnessMatrix(self):
                          
         print('Assemblying tangent stiffness matrix')
@@ -116,15 +120,21 @@ class flexibleBody(object):
         None.
 
         '''
+        # TODO adapt to 3D
         curGdl = 0
         for el in element:
             el.parentBody = self
             for nd in el.nodes:
-                nd.globalDof = list(range(curGdl,curGdl+4))
-                curGdl += 4
+                nodalDof = len(nd.q)
+                nd.globalDof = list(range(curGdl,curGdl+nodalDof))
+                curGdl += nodalDof
             curGdl = el.globalDof[-1]-3 
         self.elementList.extend(element)
         self.totalDof = el.globalDof[-1] + 1
+        self.nodalElasticForces = np.zeros(self.totalDof)
+        
+        print('Added {0} elements to body ''{1:s}'''.format(len(element),self.name))
+        
         
     def plotPositions(self, pointsPerElement = 5, show=False):
         points = np.linspace(-1.,1.,pointsPerElement)
@@ -132,8 +142,10 @@ class flexibleBody(object):
         xy = np.empty([0,2])
         
         for ele in self.elementList:
-            for i in range(pointsPerElement):
+            for i in range(pointsPerElement-1):
                 xy = np.append(xy,ele.interpolatePosition(points[i],0),axis=0)
+        #add last point
+        xy = np.append(xy,ele.interpolatePosition(points[-1],0),axis=0)
                 
         if show:        
             plt.plot(xy[:,0],xy[:,1])
@@ -143,6 +155,7 @@ class flexibleBody(object):
     
     def updateDisplacements(self,z):
         '''
+        Updates the positions of the body nodes
 
         Parameters
         ----------
@@ -152,9 +165,31 @@ class flexibleBody(object):
         Returns
         -------
         None.
-
+com
         '''
+        changedDof = np.zeros(z.shape,dtype=np.bool8)
         
         for ele in self.elementList:
+            # cycle through nodes
             for nd in ele.nodes:
+                changedDof[nd.globalDof] += not np.allclose(nd.q,z[nd.globalDof],
+                                                            atol=1e-12,rtol=1e-8)
                 nd.q = z[nd.globalDof]
+            # finished cycling through nodes
+            
+        for ele in self.elementList:
+            ele.changedStates = False # to avoid the element being constantly activated
+            if any(changedDof[ele.globalDof] == True):
+                ele.changedStates = True
+    
+            
+    
+    def totalStrainEnergy(self):
+        
+        U = 0
+        
+        for ele in self.elementList:
+            U += ele.strainEnergyNorm()
+            
+        return U
+                

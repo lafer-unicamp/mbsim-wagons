@@ -4,13 +4,20 @@
 Created on Fri Oct 15 07:36:03 2021
 
 @author: leonardo
+
+Constraint stabilization using Gear method
+
+
 """
 
 from nachbagauer import elementQuadratic, node
 from materials import linearElasticMaterial
 from flexibleBody import flexibleBody
 import numpy as np
+from solver import integrateEulerSemiImplicit
 from matplotlib import pyplot as plt
+from scipy.optimize import fsolve
+
 
 np.seterr('raise')
 
@@ -34,8 +41,8 @@ diametro = 6.0e-3
 g = [0,-9.810*0]
 
 # malha
-nel = 2
-nodesA = [0]*(nel*3-1)*4
+nel = 4
+nodesA = [0]*(nel*3-1)
 for i in range(nel+1):
     nodesA[i]=node(Lmanivela + Lbiela * i/nel,0.0,0.0,1.0)
     
@@ -66,9 +73,29 @@ massaPistao = massaManivela
 RESTRIÇõES
 '''
 
+def constraints(q,u,t):
+    
+    gC = np.zeros(5)
+    
+    # PINO ENTRE MANIVELA E BIELA
+    gC[0] = Lmanivela * np.cos(q[0]) - q[1] - Lmanivela
+    gC[1] = Lmanivela * np.sin(q[0]) - q[2]
+    
+    # PINO ENTRE BIELA E PISTÃO
+    gC[2] = q[-5] - q[-1] + (Lmanivela + Lbiela)
+    
+    # PRISMÁTICA
+    gC[3] = q[-4]
+    
+    # MOTOR
+    gC[4] = q[0] - u[0]*t
+       
+    return gC
+
 def Phi(q,u):
     
     Phi = np.zeros([5,q.shape[0]])
+    w = np.zeros(Phi.shape[0])
     
     # PINO ENTRE MANIVELA E BIELA
     Phi[0,0] = Lmanivela*np.sin(q[0])
@@ -85,36 +112,27 @@ def Phi(q,u):
     
     # VELOCIDADE ANGULAR CONSTANTE
     Phi[4,0] = 1.
+    w[4] = 150
     
-    return Phi
-
-
-'''
-SOLVER
-'''
-
-
-dt = 1e-5
-tf = 9 / 150
-
-t = [0]
-q = []
-u = []
-
-q0 = np.array([0.]*(2+biela.totalDof))
-q0[-1] = Lbiela + Lmanivela
-u0 = np.array([0.]*(2+biela.totalDof))
-u0[0] = 150  # velocidade angular da manivela
-u0[2] = 150 * Lmanivela
-u0[6] = 150 * Lmanivela * 0.75
-u0[10] = 150 * Lmanivela * 0.50
-u0[14] = 150 * Lmanivela * 0.25
-
-q.append(q0)
-u.append(u0)
-
+    return Phi, w
 
 def forcas(q,u):
+    '''
+    Calculates the forces for the dynamical system
+
+    Parameters
+    ----------
+    q : array
+        positions.
+    u : array
+        velocities.
+
+    Returns
+    -------
+    forcas : array
+        forces.
+
+    '''
     
     forcaPesoManivela = massaManivela * g[1] * Lmanivela / 2 * np.cos(q[0])
     
@@ -129,41 +147,39 @@ def forcas(q,u):
     forcas[1:-1] = forcaPesoBiela.T - forcaElasticaBiela
     
     return forcas
+'''
+SOLVER
+'''
+
+omega = 150
 
 
-def perturbaForca(function,f0,x0,xdot0):
-    qsave = q[i]
-    q[i] += 1e-6
-    
-    rigidez = (function(x0,xdot0) - f0) * 1e6
-    
-    q[i] = qsave
-    
-    return rigidez
+t = [0]
+q = []
+u = []
 
-import multiprocessing
-def evaluateJacobian(function,x0,xdot0=0,parameter=0):
-    
-    f0 = function(x0,xdot0)
-    
-    J = np.zeros([f0.shape[0],x0.shape[0]])
-    
-    if parameter == 0:
-        q = x0
-    else:
-        q = xdot0
-    
-    for i,col in enumerate(J.T):
-        qsave = q[i]
-        q[i] += 1e-6
-        
-        col[:] = (function(x0,xdot0) - f0) * 1e6
-        
-        q[i] = qsave
-        
+q0 = np.array([0.]*(2+biela.totalDof))
+q0[-1] = Lbiela + Lmanivela
+u0 = np.array([0.]*(2+biela.totalDof))
+u0[0] = omega  # velocidade angular da manivela
+u0[2] = omega * Lmanivela
+u0[6] = omega * Lmanivela * 0.875
+u0[10] = omega * Lmanivela * 0.75
+u0[14] = omega * Lmanivela * 0.625
+u0[18] = omega * Lmanivela * 0.500
+u0[22] = omega * Lmanivela * 0.375
+u0[26] = omega * Lmanivela * 0.250
+u0[30] = omega * Lmanivela * 0.125
 
-        
-    return J
+q.append(q0)
+u.append(u0)
+
+
+
+
+
+
+
 
 
 t = []
@@ -171,6 +187,7 @@ q = []
 u = []
 lam = []
 probe = []
+U = []
 
 def output(t_,q_,u_,lam_):
     t.append(t_)
@@ -184,105 +201,36 @@ def output(t_,q_,u_,lam_):
     posiAB = posi[-1] - posiA
     
     Ydef = posiP - (posiA + posiAB/2)
+    posiAB /= np.linalg.norm(posiAB)
+    posiABrot = posiAB * np.matrix([[0,1],[-1,0]])
+    Ydef = np.dot(Ydef,np.column_stack((posiAB.T,posiABrot.T)))
     
-    probe.append(Ydef.A1)
+    probe.append(Ydef[0].A1)
+    
+    
+    print('t = {0:1.8f}'.format(t_))
     
 
 
 
-def integrateEulerSemiImplicit(q0,u0,dt,M,extForce,Phi,tfinal,writeOutput,dtout=1e-3):
-    
-    tout = 0.
-    
-    tn = 0.
-    qn = q0.copy()
-    un = u0.copy()
-    
-    # constraint Jacobian
-    Cqn = Phi(qn,un)
-    
-    ndof = M.shape[0]
-    ncons = Cqn.shape[0]
-    
-    LHS = np.zeros([ndof+ncons,ndof+ncons])
-    RHS = np.zeros(ndof+ncons)
-    
-    writeOutput(tout,q0,u0,np.zeros(ncons))
-   
-    
-    Jq = evaluateJacobian(extForce,qn,un,0)
-    Ju = evaluateJacobian(extForce,qn,un,1)
-    
-    jacoCounter = 0
-    
-    while tn <=tfinal:
-        
-        
-        # explicit update for positions
-        deltaq = dt*un
-        qnp1 = qn + deltaq
-        
-        # constraint Jacobian
-        Cqn = Phi(qn,un)
-        Cqnp1 = Phi(qnp1,un)
-        
-        # assemble implicit problem
-        LHS[0:ndof,0:ndof] = M - dt * Ju - dt * dt * Jq
-        if Cqn.shape[0] != 0:
-            LHS[0:ndof,ndof:] = Cqn.T
-            LHS[ndof:,0:ndof] = Cqnp1
-        
-        RHS[0:ndof] = dt * extForce(qn,un) + dt * dt * np.dot(Jq,un)
-        if Cqn.shape[0] != 0:
-            RHS[ndof:] = -np.dot(Cqnp1,un)
-            RHS[-1] += 150 
-        
-        incr = np.linalg.solve(LHS,RHS)
-        du = incr[0:ndof]
-        lamnp1 = incr[ndof:]/dt
-        
-        
-        # implicit update for velocities
-        unp1 = un + du
-        
-        # jacobian update using Broyden's method
-        dJq = (extForce(qnp1,unp1) - extForce(qn,un) - np.dot(Jq,deltaq)) 
-        
-        if np.linalg.norm(dJq) > 50:
-            Jq = evaluateJacobian(extForce,qnp1,unp1,0)
-            #Ju = evaluateJacobian(extForce,q[-1],u[-1],1)
-            if jacoCounter < 5:
-                # if the number of steps without jacobian reevaluations is smaller than N, reduce time step
-                dt = dt/2
-                print('Reduced time step to {0:1.4e}'.format(dt))
-            print('Reevaluate jacobian after {0} steps at {1:1.8f} s'.format(jacoCounter,tn))
-            jacoCounter = 0
-        else:
-            jacoCounter += 1
-            Jq += dJq / (np.dot(deltaq,deltaq)+2e-16) * deltaq.T
-            #Ju += (extForce(q[-1],u[-1]) - extForce(q[-2],u[-2]) - np.dot(Ju,du)) / (np.dot(du,du)) * du.T
-        
-        if jacoCounter > 20:
-                dt = 1.15 * dt
-                print('Increased time step to {0:1.4e}'.format(dt))
-        
-        tnp1 = tn + dt
-        
-        
-        if tnp1 - tout > dtout:
-            writeOutput(tnp1,qnp1,unp1,lamnp1)
-            tout = tnp1
-            
-            
-        # updates states
-        qn = qnp1
-        un = unp1
-        tn = tnp1
+
             
     
 M = np.zeros([2+biela.totalDof,2+biela.totalDof])
 M[0,0] = IzManivela
 M[1:-1,1:-1] = biela.assembleMassMatrix()
 M[-1,-1] = massaPistao
-    
-t,q,u,lam = integrateEulerSemiImplicit(q0, u0, dt, M, forcas, Phi, tf, output, dtout=2e-4)
+ 
+
+dt = 5e-6
+tf = 3 * np.pi / 150
+   
+integrateEulerSemiImplicit(q0, u0, dt, M, 
+                           forcas, constraints, Phi,
+                           tf, output, dtout=2e-4, minStep=10.e-7, maxStep=2e-5)
+
+q = np.asmatrix(q)
+u = np.asmatrix(u)
+probe = np.asmatrix(probe)
+
+

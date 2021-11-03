@@ -17,7 +17,7 @@ np.seterr('raise')
 TESTE DOS ELEMENTOS COM SIMULAÇÃO DINÂMICA EXPLÍCITA
 '''
 
-steel = linearElasticMaterial('Steel',207e3,0.3,7.85e-6)
+steel = linearElasticMaterial('Steel',207e3,0.3,7.85e-3)
 body = flexibleBody('Bar',steel)
 body2 = flexibleBody('Bar quadratic',steel)
 
@@ -50,7 +50,7 @@ SOLVER DE EULER
 ''' RESTRIÇÕES '''
 # Constraint matrix 
 simBody = body2
-conDof = [0,1]
+conDof = [0,1,2,3]
 gdl = simBody.totalDof
 Phi = np.zeros([len(conDof),gdl])
 # fixed bc
@@ -58,8 +58,8 @@ for d in conDof:
     Phi[d,d] = 1
     
     
-finalTime = 1
-h = 1e-4 # timestep
+finalTime = 2
+h = 5e-5 # timestep
 t = [0]
 
 #LHS matrix
@@ -84,15 +84,15 @@ z = [np.zeros([2*gdl+len(conDof)])]
 
 ''' FORÇAS EXTERNAS'''
 Qa = np.zeros([gdl])
-Qa[-3] = 0*5e5 * 0.5**3
+Qa[-3] = 5e5 * 0.5**3
 
 
-g = [0,-9.81e3]
+g = [0,-9.81e3*0]
 
 
 
 '''Matriz de amortecimento'''
-C = 0.0002 * simBody.assembleTangentStiffnessMatrix()
+C = 0.002 * simBody.assembleTangentStiffnessMatrix()
 
 outFlag = 0
 rhs = np.zeros([2*gdl+len(conDof)])
@@ -123,10 +123,12 @@ while t[-1] < finalTime:
     
     outFlag +=1
     
-    if outFlag == 400:
+    if outFlag == 1000:
         print('{0:1.6f}'.format(t[-1]))
-        simBody.plotPositions(show=True)
+        #simBody.plotPositions(show=True)
         outFlag = 0
     
     
 z = np.asmatrix(z)
+q = z[:,:simBody.totalDof]
+

@@ -10,7 +10,7 @@ from materials import linearElasticMaterial
 from flexibleBody import flexibleBody
 import numpy as np
 from scipy.optimize import fsolve
-
+from time import time
 '''
 TEST PROGRAM
 '''
@@ -59,6 +59,7 @@ for d in conDof:
     Phi[d,d] = 1
 
 record  = []
+Qelist=[]
 def f(z):
     
     ndof = gdl
@@ -69,6 +70,7 @@ def f(z):
     simBody.updateDisplacements(x)
             
     Qe = simBody.assembleElasticForceVector()
+    Qelist.append(Qe.T)
     Qa = Qe*0
     Qa[-3,0] = -5.0e5 * 0.5 * 0.5 * 0.5
     
@@ -89,10 +91,13 @@ z0[-3] =  5.0e5 * 0.5 * 0.5 * 0.5
 z0[-1] = - z0[-3] * 2000
 #z = opt.newton_krylov(f,z0,maxiter=40,f_tol=1e-4,verbose=True)
 
-z, info, ier, msg = fsolve(f, z0,full_output=True, col_deriv=True)
+ts = time()
+z, info, ier, msg = fsolve(f, z0, full_output=True, col_deriv=True)
 print(msg)
+print('Simulation took {0:1.8g} seconds'.format(time()-ts))
 
 xy = simBody.plotPositions(show=False)
 tipDisp = xy[-1,:]
 gam = np.pi/2-np.arctan2(z[gdl-1]+1,z[gdl-2])
-print('dx = {0:1.8e} m   | dy = {1:1.8e} m | theta = {2:1.8e}'.format(-z[-8]/1000,z[-7]/1000,gam))
+U = simBody.totalStrainEnergy()
+print('dx = {0:1.8e} m   | dy = {1:1.8e} m \ntheta = {2:1.8e} rad| Unorm = {3:3.5e} J'.format(-z[-8]/1000,z[-7]/1000,gam,U/1000))
