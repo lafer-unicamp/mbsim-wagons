@@ -47,6 +47,9 @@
 # xml
 *.xml
 
+# data files (results)
+*.dat
+
 # Integrator garbage
 *.sum
 *.plt
