@@ -14,7 +14,7 @@ import numpy as np
 import flexibleBody, materials
 
 
-[xi,eta,L,H] =symbols(['xi','eta','L','H'])
+[xi,xi_,eta,zeta,L,H,W] =symbols(['xi','xi_','eta','zeta','L','H','W'])
 varList = []
 for i in range(12):
     varList.append('q[{}]'.format(i))
@@ -44,14 +44,42 @@ S4 = eta * S3
 Sl = 1/L * Matrix([[S1,0 ,S2,0 ,S3,0 ,S4,0],
                        [0 ,S1,0 ,S2,0 ,S3,0 ,S4]])
 
-S = Sq
-Sxxi = diff(S[0,:],xi)
-Sxeta = diff(S[0,:],eta)
-Syxi = diff(S[1,:],xi)
-Syeta = diff(S[1,:],eta)
 
-def J(z):
-    return simplify(Matrix([[Sxxi*z,Sxeta*z],[Syxi*z,Syeta*z]]))
+# elemento quadrático 3D
+xi_ = 2*xi/L
+#first node
+S13D = - xi_/2 * (1-xi_)
+S23D = eta * S13D
+S33D = zeta * S13D
+#middle node
+S43D = 1 - xi_*xi_
+S53D = eta*S43D
+S63D = zeta*S43D
+#last node
+S73D = xi_/2 * (1+xi_)
+S83D = eta * S73D
+S93D = zeta * S73D
+
+E  = eye(3)
+
+S3D = Matrix([S13D*E,S23D*E,S33D*E,S43D*E,S53D*E,
+              S63D*E,
+              S73D*E,
+              S83D*E,
+              S93D*E]).T
+
+
+S = S3D
+Sxi = diff(S,xi)
+Seta = diff(S,eta)
+Szeta = diff(S,zeta)
+
+Sx_dxi = Sxi[0,:]
+Sx_deta = Sxi[1,:]
+Sx_dzeta = Sxi[2,:]
+
+#def J(z):
+ #   return simplify(Matrix([[Sxxi*z,Sxeta*z],[Syxi*z,Syeta*z]]))
 
 '''
 J = Matrix([[Sxxi*q,Sxeta*q],[Syxi*q,Syeta*q]])

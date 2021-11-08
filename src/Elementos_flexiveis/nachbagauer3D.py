@@ -24,20 +24,20 @@ from numpy.linalg import norm, inv
 
 class node(object):
     """
-    finite element node with six dof
+    finite element node with nine dof
     
     Parameters
     __________
-        u1 - reference coordinate x
-        u2 - reference coordinate y
-        u3 - referemce coordinate z
-        up1 - reference slope relative to x
-        up2 - reference slope relative to y
-        up3 - reference slope relative to z
+        listOfDof - list
+            list containing the node DOF in the following order:
+                listOfDof[0:3] - x,y,z coordinates of the node
+                listOfDof[3:6] - x,y,z coordinates of the section slope w.r.t. eta
+                listOfDof[6:9] - x,y,z coordinates of the section slope w.r.t. zeta
     """
     
-    def __init__(self, u1=0., u2=0., u3=0., up1 = 0., up2 = 1., up3 = 1.):
-        self.q0 = [u1,u2,u3,up1,up2,up3]
+    def __init__(self, listOfDof=[0.]*9):
+                
+        self.q0 = listOfDof
         self.q = [0.0]*len(self.q0)
         self.globalDof = [i for i in range(len(self.q0))]
         
@@ -166,6 +166,7 @@ class beamANCFelement3D(object):
         
         if q == None:
             q = self.qtotal
+        nq = len(q)
   
         '''
         Shape function derivatives
@@ -173,11 +174,13 @@ class beamANCFelement3D(object):
         with X_i  in [x,y,z]
              xi_j in [xi_,eta_,zeta_]
         '''
-        dSx1, dSx2, dSx3, dSy1, dSy2, dSy3, dSz1, dSz2, dSz3 = self.shapeFunctionDerivative(xi_,eta_)
+        dSx1, dSx2, dSx3, dSy1, dSy2, dSy3, dSz1, dSz2, dSz3 = self.shapeFunctionDerivative(xi_,eta_,zeta_)
+        dS = self.shapeFunctionDerivative(xi_, eta_,zeta_)
+        dS = dS.reshape(3,-1)
         
+        M1 = dot([[dSx1, dSx2, dSx3],[dSy1, dSy2, dSy3],[dSz1, dSz2, dSz3]],q).round(16)
+        M2 = dot([dS[:,:nq],dS[:,nq:2*nq],dS[:,2*nq:3*nq]],q).T.round(16)
         
-        M1 = dot([[dSx1, dSx2, dSx3],[dSy1, dSy2, dSy3],[dSz1, dSz2, dSz3]],q)
-
         return np.asmatrix(M1)
     
     def saveInitialJacobian(self):
@@ -202,20 +205,44 @@ class beamANCFelement3D(object):
         
         jaco = []       
         
-        jaco.append([self.initialJacobian(-1,1),self.initialJacobian(1,1)])
-        jaco.append([self.initialJacobian(-1,-1),self.initialJacobian(1,-1)])
+        '''create jacobian grid for computation
+        first line is the front slice with xi_ = 1
+        we start with eta_ = 1 and zeta_ = 1 and rotate clockwise
+        
+        (1,1,1) pt1 ---------- pt2 (1,1,-1)
+                    |        |
+                    |        |
+        (1,-1,1)pt4 ---------- pt3 (1,-1,-1)
+        
+             ^ y
+             |
+         z <--
+        
+        '''
+        jaco.append([self.initialJacobian(1,1,1), #pt1
+                     self.initialJacobian(1,1,-1),#pt2
+                     self.initialJacobian(1,-1,-1),#pt3
+                     self.initialJacobian(1, -1, 1) #pt4
+                     ])
+        ''' now the backslice, same scheme with xi_=-1 '''
+        jaco.append([self.initialJacobian(-1,1,1), #pt1
+                     self.initialJacobian(-1,1,-1),#pt2
+                     self.initialJacobian(-1,-1,-1),#pt3
+                     self.initialJacobian(-1, -1, 1) #pt4
+                     ])
         
         invJaco = np.linalg.inv(jaco)
         
         detJaco = np.linalg.det(jaco)
         
-        if jaco[0][0].all() == jaco[0][1].all() and jaco[0][1].all() == jaco[1][0].all():
-            constant = True
+        #TODO adjust to used curved beams
+        self.isJ0constant = True
         
-        return jaco, invJaco, detJaco, constant
+        return jaco, invJaco, detJaco
         
     
-    def loadInitialJacobian(self,xi_,eta_):
+    def loadInitialJacobian(self,xi_,eta_,zeta_):
+        #TODO create trilinear interpolation
         
         if self.isJ0constant:
             J = self.J0[0][0]
@@ -250,7 +277,7 @@ class beamANCFelement3D(object):
             for j in range(npoints):
                 for k in range(npoints):
                     S = self.shapeFunctionMatrix(gauss[i],gauss[j],gauss[k])
-                    M += S.T*S * w[i] * w[j] * w[k]
+                    M += S.T.dot(S) * w[i] * w[j] * w[k]
                 
         """we have to multiply by the dimensions because
         calculations are carried out on non-dimensional coordinates [-1,1]
@@ -291,7 +318,7 @@ class beamANCFelement3D(object):
     def stressTensorByPosition(self,xi_,eta_,zeta_,split=True):
         return self.parentBody.material.stressTensor(self.strainTensor(xi_, eta_,zeta_),split)
     
-    def strainTensor(self,xi_,eta_,q=None):
+    def strainTensor(self,xi_,eta_,zeta_,q=None):
         '''
         strainTensor calculates the strain tensor at element coordinates
         (xi_,eta_), both defined between -1 and 1
@@ -314,9 +341,9 @@ class beamANCFelement3D(object):
         if q == None:
             q = self.qtotal
         
-        F = self.getJacobian(xi_,eta_,q) * self.loadInitialJacobian(xi_,eta_)[2]
+        F = self.getJacobian(xi_,eta_,zeta_,q) * self.loadInitialJacobian(xi_,eta_,zeta_)[2]
         
-        return 0.5 * (dot(F.T,F) - np.matrix([[1.,0.],[0.,1.]]))
+        return 0.5 * (dot(F.T,F) - np.eye(3))
     
     
     def shapeFunctionDerivative(self,xi_,eta_):
@@ -324,7 +351,7 @@ class beamANCFelement3D(object):
     
     
     
-    def strainTensorDerivative(self,xi_,eta_,q=None):
+    def strainTensorDerivative(self,xi_,eta_,zeta_,q=None):
         '''
         Gets the strain tensor derivative at a certain point of the element
         (given by xi_ and eta_).
@@ -343,21 +370,21 @@ class beamANCFelement3D(object):
             deps_dq[:,:,n] can be used to access the n-th slice of the tensor
 
         '''
-        invJ0 = self.loadInitialJacobian(xi_, eta_)[2]
+        invJ0 = self.loadInitialJacobian(xi_, eta_, zeta_)[2]
         
         if q == None:
             q = self.qtotal
         
-        dSx_dxi, dSx_deta, dSy_dxi, dSy_deta = self.shapeFunctionDerivative(xi_,eta_)
+        dSx1, dSx2, dSx3, dSy1, dSy2, dSy3, dSz1, dSz2, dSz3 = self.shapeFunctionDerivative(xi_,eta_,zeta_)
         
         
         # TODO: separate into threads
-        U11 = np.sum([np.outer(dSx_dxi,dSx_dxi), np.outer(dSy_dxi,dSy_dxi)],axis=0)
-        U12 = np.sum([np.outer(dSx_dxi,dSx_deta), np.outer(dSy_dxi,dSy_deta)], axis=0)
-        U21 = U12.T
-        U22 = np.sum([np.outer(dSx_deta,dSx_deta), np.outer(dSy_deta,dSy_deta)],axis=0)
+        #U11 = np.sum([np.outer(dSx_dxi,dSx_dxi), np.outer(dSy_dxi,dSy_dxi)],axis=0)
+        #U12 = np.sum([np.outer(dSx_dxi,dSx_deta), np.outer(dSy_dxi,dSy_deta)], axis=0)
+        #U21 = U12.T
+        #U22 = np.sum([np.outer(dSx_deta,dSx_deta), np.outer(dSy_deta,dSy_deta)],axis=0)
             
-        qU12,qU11,qU22 = dot(q,[U12+U21,2*U11,2*U22])     
+        qU12,qU11,qU22 = 0#dot(q,[U12+U21,2*U11,2*U22])     
         
         ndof = len(q)
         deps_dq = np.zeros((2,2,ndof),dtype=np.float64)
@@ -487,7 +514,7 @@ class beamANCFelement3D(object):
 
 
 #%%
-class elementLinear(beamANCFelement):
+class beamANCF3Dlinear(beamANCFelement3D):
     """
     Planar finite element with linear interpolation
     """
@@ -571,7 +598,7 @@ class elementLinear(beamANCFelement):
     
     
 #%%    
-class elementQuadratic(beamANCFelement):
+class beamANCF3Dquadratic(beamANCFelement3D):
     """
     Planar finite element with quadratic interpolation
     """
@@ -584,77 +611,99 @@ class elementQuadratic(beamANCFelement):
         intermediateNode.q0 = [(a+b)*0.5 for a,b in zip(node1.q0,node2.q0)]
         #intermediateNode.qtotal = np.asarray(intermediateNode.q0) + np.asarray(intermediateNode.q)
         self.nodes = [node1,intermediateNode,node2]
-        self.J0, self.invJ0, self.detJ0, self.isJ0constant = self.saveInitialJacobian()
+        self.J0, self.invJ0, self.detJ0 = self.saveInitialJacobian()
         self.nodalElasticForces = np.zeros(12,dtype=np.float64)
         # boolean flag that checks if the state had changed recently
         self.changedStates = np.bool8(True) 
   
-    def shapeFunctionMatrix(self, xi_, eta_):
+    def shapeFunctionMatrix(self, xi_, eta_, zeta_):
         '''
         Shape functions respect the order of the nodes: 1, intermediate, 2
         '''
         eta = eta_ * self.height / 2
-
+        zeta = zeta_ * self.height / 2
+        
+        #first node
         S1 = - xi_/2 * (1-xi_)
         S2 = eta * S1
-        S3 = xi_/2 * (1+xi_)
-        S4 = eta * S3
-        S5 = 1 - xi_*xi_
-        S6 = eta*S5
+        S3 = zeta * S1
+        #middle node
+        S4 = 1 - xi_*xi_
+        S5 = eta*S4
+        S6 = zeta*S4
+        #last node
+        S7 = xi_/2 * (1+xi_)
+        S8 = eta * S7
+        S9 = zeta * S7
         
-        return matrix([[S1, 0 ,S2, 0 , S5, 0 , S6, 0 , S3, 0 ,S4 ,0],
-                       [0 , S1, 0, S2, 0 , S5, 0 , S6, 0 ,S3 ,0  ,S4]])
+        I = np.eye(3,dtype=np.float64)
+        
+        return np.concatenate((S1*I,S2*I,S3*I,S4*I,S5*I,S6*I,S7*I,S8*I,S9*I),
+                              axis=1)
     
-    def shapeFunctionDerivative(self,xi_,eta_):
+    def shapeFunctionDerivative(self,xi_,eta_,zeta_):
         """
 
         Parameters
         ----------
-        coord : INTEGER
-            Number of the coordinate, x-0, y-1, z-2
-        param : INTEGER
-            Element parameter, xi-0, eta-1, zeta-2
-        xi : DOUBLE
+        xi_: DOUBLE
             Longitudinal position
-        eta : lateral position
+        eta_: DOUBLE 
+            Lateral position
+        zeta_: DOUBLE
+            Vertical positiion
 
         Returns
         -------
-        The derivative of the shape function evaluated at interest points.
+        List of derivatives
+        
+        dSx1, dSx2, dSx3, dSy1, dSy2, dSy3, dSz1, dSz2, dSz3
+        
+        dSx1 = dSx/dxi      dSy1 = dSy/dxi      dSz1 = dSz/dxi
+        dSx2 = dSx/deta     dSy2 = dSy/deta     dSz2 = dSz/deta
+        dSx3 = dSx/dzeta    dSy3 = dSy/dzeta    dSz3 = dSz/dzeta
 
         """
-        
+        #TODO make 3D
         L = self.length
-        xi = xi_ * L/2
         eta = eta_ * self.height / 2
+        zeta = zeta_ * self.width / 2
         
-        
-        # all the following must be scaled by 1/L^2. We do that in return
-        #s1 = -L + 4*xi
-        #s2 = L + 4*xi
+        # reusable variables
         s1 = -1 + 2*xi_
-        s2 = 1 + 2*xi_
-
-        #dSxxi =  np.array([s1, 0, eta*s1, 0, -4*xi_, 0, -4*xi_*eta, 0, s2, 0, eta*s2, 0]) * 1/L
-
-        #dSyxi =  np.array([0, s1, 0, eta*s1, 0, -4*xi_, 0, -4*eta*xi_, 0, s2, 0,  eta*s2]) * 1/L
-
-        #dSxeta = np.array([0, 0, xi_/2*(-1 + xi_), 0, 0, 0, 1-xi_*xi_, 0, 0, 0, xi_/2*(1 + xi_), 0])
+        s2 = -4*xi_
+        s3 = 1 + 2*xi_
+              
+        I = np.eye(3)
         
-        #dSyeta = np.array([0 ,0 ,0, xi_/2*(-1 + xi_),0 ,0 ,0 ,1-xi_*xi_, 0, 0, 0, xi_/2*(1 + xi_)])
-
-        dS = np.array([[s1, 0, eta*s1, 0, -4*xi_, 0, -4*xi_*eta, 0, s2, 0, eta*s2, 0] * 1/L,
-                      [0, s1, 0, eta*s1, 0, -4*xi_, 0, -4*eta*xi_, 0, s2, 0,  eta*s2] * 1/L,
-                      [0, 0, xi_/2*(-1 + xi_), 0, 0, 0, 1-xi_*xi_, 0, 0, 0, xi_/2*(1 + xi_), 0],
-                      [0 ,0 ,0, xi_/2*(-1 + xi_),0 ,0 ,0 ,1-xi_*xi_, 0, 0, 0, xi_/2*(1 + xi_)]])
-                      
-                      
+        dS = np.zeros([9,27],dtype=np.float64)
         
-        return dS[0], dS[2], dS[1], dS[3]
+        # derivative wrt xi
+        dS[:3,:3] = I*s1/L
+        dS[:3,3:6] = I*s1*eta/L
+        dS[:3,6:9] = I*s1*zeta/L
+        dS[:3,9:12] = I*s2/L
+        dS[:3,12:15] = I*s2*eta/L
+        dS[:3,15:18] = I*s2*zeta/L
+        dS[:3,18:21] = I*s3/L
+        dS[:3,21:24] = I*s3*eta/L
+        dS[:3,24:27] = I*s3*zeta/L
+        
+        # derivative wrt eta
+        dS[3:6,3:6] = I*xi_*(-1+xi_)/2
+        dS[3:6,12:15] = I*(1-xi_*xi_)
+        dS[3:6,21:24] = I*xi_*(1+xi_)/2
+        
+        # derivative wrt zeta
+        dS[6:9,6:9] = dS[3:6,3:6]
+        dS[6:9,15:18] = dS[3:6,12:15]
+        dS[6:9,24:27] = dS[3:6,21:24]
+        
+        return dS
     
     
     
-    def getWeightNodalForces(self,grav):
+    def getWeightNodalForces(self,grav=[0,-1.,0]):
         '''
         Get nodal forces due to weight
         
@@ -675,11 +724,45 @@ class elementQuadratic(beamANCFelement):
         H = self.height
         W = self.width
         Qg =  L * H * W * 0.25 *  0.3333 * dot(grav, matrix([
-            [2, 0, 0, 0, 8, 0, 0, 0, 2, 0, 0, 0],
-            [0, 2, 0, 0, 0, 8, 0, 0, 0, 2, 0, 0]]))*eye(len(self.q))*self.parentBody.material.rho
+            [2, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0]],
+            dtype=np.float64))*eye(len(self.q))*self.parentBody.material.rho
         
         return Qg.reshape(1,-1)
 
+
+
+
+
+if __name__ == '__main__':
+    print('Unit test')
+    import materials, flexibleBody
+    steel = materials.linearElasticMaterial('Steel',200e9,0.3,7.85e3)
+    rod = flexibleBody.flexibleBody('Rod',steel)
+
+    # comprimentos
+    Lrod = 150.0e-3
+
+    # seção transversal
+    h = 6.0e-3
+
+    # gravidade
+    g = [0,-9.810]
+
+    # malha
+    nel = 2
+    nodesA = [0]*(nel+1)
+    for i in range(nel+1):
+        nodesA[i]=node([Lrod * i/nel,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0])
+        
+    elemA = [0]*nel
+    for i in range(nel):
+        elemA[i]=beamANCF3Dquadratic(nodesA[i],nodesA[i+1], h, h)
+        
+    rod.addElement(elemA)
+    M = rod.assembleMassMatrix()
+    G = rod.assembleWeightVector(g=[0,1,0])
 
 
 

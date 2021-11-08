@@ -140,7 +140,7 @@ class beamANCFelement(object):
     def mass(self):
         return self.length * self.height * self.width * self.parentBody.material.rho
     
-    def interpolatePosition(self,xi_, eta_):
+    def interpolatePosition(self,xi_, eta_,zeta_):
         """
         Returns the interpolated position given the non-dimensional parameters
         xi_ and eta_. Notice that xi_ and eta_ range from -1 to 1.
@@ -173,11 +173,14 @@ class beamANCFelement(object):
         
         if q == None:
             q = self.qtotal
+        nq = len(q)
   
-        dSx_dxi, dSx_deta, dSy_dxi, dSy_deta = self.shapeFunctionDerivative(xi_,eta_)
+        # TODO remove in future
+        # dSx_dxi, dSx_deta, dSy_dxi, dSy_deta = self.shapeFunctionDerivative(xi_,eta_)
+        dS = self.shapeFunctionDerivative(xi_, eta_)
+        dS = dS.reshape(2,-1)
         
-        
-        M1 = dot([[dSx_dxi,dSx_deta],[dSy_dxi,dSy_deta]],q)
+        M1 = dot([dS[:,:nq],dS[:,nq:2*nq]],q).T.round(16)
 
         return np.asmatrix(M1)
     
@@ -527,15 +530,12 @@ class elementLinear(beamANCFelement):
         
         # all the following must be scaled by 1/L. We do that in return
 
-        dSxxi =  np.array([-1,0 ,-eta,0   ,1,0,eta,0])/L
-
-        dSyxi =  np.array([0 ,-1,0   ,-eta,0,1,0  ,eta])/L
-
-        dSxeta = np.array([0 ,0 ,S1  ,0   ,0,0,S3 ,0])/L
-
-        dSyeta = np.array([0 ,0 ,0   ,S1  ,0,0,0  ,S3])/L
+        dS =  np.array([[-1,0 ,-eta,0   ,1,0,eta,0]/L,
+                       [0 ,-1,0   ,-eta,0,1,0  ,eta]/L,
+                       [0 ,0 ,S1  ,0   ,0,0,S3 ,0]/L,
+                       [0 ,0 ,0   ,S1  ,0,0,0  ,S3]/L])
         
-        return dSxxi,dSxeta, dSyxi, dSyeta
+        return dS
     
     
     def getWeightNodalForces(self,grav):
@@ -632,7 +632,7 @@ class elementQuadratic(beamANCFelement):
                       
                       
         
-        return dS[0], dS[2], dS[1], dS[3]
+        return dS
     
     
     

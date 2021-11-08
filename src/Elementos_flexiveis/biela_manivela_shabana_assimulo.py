@@ -10,7 +10,7 @@ from materials import linearElasticMaterial
 from flexibleBody import flexibleBody
 import numpy as np
 from matplotlib.pyplot import plot
-from assimulo.solvers import IDA, ODASSL
+from assimulo.solvers import IDA, ODASSL, Radau5DAE
 from assimulo.special_systems import Mechanical_System as ms
 
 
@@ -202,7 +202,7 @@ bm_sys = biela_manivela()
 bm = bm_sys.generate_problem('ind3')
 
 
-DAE = IDA(bm)
+DAE = ODASSL(bm)
 DAE.report_continuously = True
 DAE.inith = 1e-3
 DAE.num_threads = 4
@@ -214,7 +214,7 @@ q = p[:,:bm_sys.n_p]
 u = p[:,bm_sys.n_p:2*bm_sys.n_p]
 lam = p[:,2*bm_sys.n_p:]
 
-
+#%%
 probe=[]
 for qi in q:
     

@@ -128,7 +128,7 @@ class flexibleBody(object):
                 nodalDof = len(nd.q)
                 nd.globalDof = list(range(curGdl,curGdl+nodalDof))
                 curGdl += nodalDof
-            curGdl = el.globalDof[-1]-3 
+            curGdl = el.globalDof[-1]-nodalDof + 1
         self.elementList.extend(element)
         self.totalDof = el.globalDof[-1] + 1
         self.nodalElasticForces = np.zeros(self.totalDof)
@@ -143,9 +143,9 @@ class flexibleBody(object):
         
         for ele in self.elementList:
             for i in range(pointsPerElement-1):
-                xy = np.append(xy,ele.interpolatePosition(points[i],0),axis=0)
+                xy = np.append(xy,ele.interpolatePosition(points[i],0,0),axis=0)
         #add last point
-        xy = np.append(xy,ele.interpolatePosition(points[-1],0),axis=0)
+        xy = np.append(xy,ele.interpolatePosition(points[-1],0,0),axis=0)
                 
         if show:        
             plt.plot(xy[:,0],xy[:,1])
