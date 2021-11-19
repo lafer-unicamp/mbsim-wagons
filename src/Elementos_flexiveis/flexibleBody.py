@@ -8,6 +8,7 @@ Created on Fri Sep  3 06:35:10 2021
 
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 ########################################
 class flexibleBody(object):
@@ -37,7 +38,7 @@ class flexibleBody(object):
         self.elementList = []
         self.totalDof = 0   # total number of degrees of freedom
         
-        print('Created body \'{}\' with material \'{}\''.format(name,material.name))
+        
         
         
     @property 
@@ -139,7 +140,7 @@ class flexibleBody(object):
     def plotPositions(self, pointsPerElement = 5, show=False):
         points = np.linspace(-1.,1.,pointsPerElement)
         
-        xy = np.empty([0,2])
+        xy = np.empty([0,self.dimensionality])
         
         for ele in self.elementList:
             for i in range(pointsPerElement-1):
@@ -147,10 +148,22 @@ class flexibleBody(object):
         #add last point
         xy = np.append(xy,ele.interpolatePosition(points[-1],0,0),axis=0)
                 
-        if show:        
-            plt.plot(xy[:,0],xy[:,1])
-            plt.show()
-        
+        if show:
+            if self.dimensionality == 2:
+                plt.figure()
+                plt.plot(xy[:,0],xy[:,1])
+                plt.xlabel('x')
+                plt.ylabel('y')
+                plt.show()
+                
+            elif self.dimensionality == 3:
+                plt.figure()
+                ax = plt.axes(projection='3d',proj_type='ortho')
+                ax.plot(xy[:,0],xy[:,1],xy[:,2])
+                ax.set_xlabel('x')
+                ax.set_ylabel('y')
+                ax.set_zlabel('z')
+                plt.show()
         return xy
     
     def updateDisplacements(self,z):
@@ -192,4 +205,38 @@ com
             U += ele.strainEnergyNorm()
             
         return U
+
+
+##############################################################################
+class flexibleBody3D(flexibleBody):
+    '''
+    Tri-dimensional flexible body
+    '''
+    
+    
+    def __init__(self, name, material):
+        super().__init__(name, material)
+        
+        self.dimensionality = np.int8(3)
+        
+        print('Created 3D body \'{}\' with material \'{}\''.format(name,material.name))
+
+class flexibleBody2D(flexibleBody):
+    '''
+    Bi-dimensional flexible body
+    '''
+    
+    
+    def __init__(self, name, material):
+        super().__init__(name, material)
+        
+        self.dimensionality = np.int8(2)
+        
+        print('Created 2D body \'{}\' with material \'{}\''.format(name,material.name))
+
+
+
+if __name__ == '__main__':
+    from materials import linearElasticMaterial
+    body = flexibleBody3D('teste', linearElasticMaterial('teste', 1, 1, 1))
                 

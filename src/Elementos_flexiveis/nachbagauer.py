@@ -465,7 +465,7 @@ class beamANCFelement(object):
             
         U *= W * L * H / 8
         
-        return U
+        return U / 2
     
     
 

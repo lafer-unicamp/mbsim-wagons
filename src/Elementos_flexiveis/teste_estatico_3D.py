@@ -1,13 +1,13 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Fri Sep 17 15:40:45 2021
+Created on Thu Nov 11 07:24:43 2021
 
-@author: lbaru
+@author: leonardo
 """
-
-from nachbagauer import elementLinear, elementQuadratic, node
+from nachbagauer3D import node, beamANCF3Dquadratic
 from materials import linearElasticMaterial
-from flexibleBody import flexibleBody2D
+from flexibleBody import flexibleBody3D
 import numpy as np
 from scipy.optimize import fsolve
 from time import time
@@ -17,40 +17,35 @@ TEST PROGRAM
 
 
 steel = linearElasticMaterial('Steel',207e3,0.3,7.85e-6)
-body = flexibleBody2D('Bar',steel)
-body2 = flexibleBody2D('Bar quadratic',steel)
+body = flexibleBody3D('Bar',steel)
 
 
-n = []
 nq = []
 nel = 4
 totalLength = 2000.
 for i in range(nel+1):
-    n.append(node(totalLength * i/nel,0.0,0.0,1.0))
-    nq.append(node(totalLength * i/nel,0.0,0.0,1.0))
+    nq.append(node([totalLength * i/nel,0.0,0.0
+                   ,0.0,1.0,0.0,
+                   0.0,0.0,1.0]))
 
 
-e = []
 eq = []
-for j in range(len(n)-1):
-    e.append(elementLinear(n[j],n[j+1],500,100))
-    eq.append(elementQuadratic(nq[j],nq[j+1],500,100))
+for j in range(len(nq)-1):
+    eq.append(beamANCF3Dquadratic(nq[j],nq[j+1],500,100))
 
 
 g = np.matrix([[0.0,-9.81]])
 
-body.addElement(e)
+body.addElement(eq)
 body.assembleMassMatrix()
-body2.addElement(eq)
-body2.assembleMassMatrix()
 
 #Kt = body.assembleTangentStiffnessMatrix()
 
 
 
 # Constraint matrix 
-simBody = body2
-conDof = [0,1,2,3]
+simBody = body
+conDof = [0,1,2,3,4,5,6,7,8]
 gdl = simBody.totalDof
 Phi = np.zeros([len(conDof),gdl])
 
@@ -72,7 +67,7 @@ def f(z):
     Qe = simBody.assembleElasticForceVector()
     Qelist.append(Qe.T)
     Qa = Qe*0
-    Qa[-3,0] = -5.0e5 * 0.5 * 0.5 * 0.5
+    Qa[-8,0] = -5.0e5 * 0.5 * 0.5 * 0.5
     
     goal = [0]*(gdl+4)
     
@@ -86,9 +81,9 @@ def f(z):
     
     return goal
 
-z0 = [0]*(gdl+4)
-z0[-3] =  5.0e5 * 0.5 * 0.5 * 0.5
-z0[-1] = - z0[-3] * 2000
+z0 = [0]*(gdl+len(conDof))
+z0[-8] =  5.0e5 * 0.5 * 0.5 * 0.5
+z0[-6] = - z0[-3] * 2000
 #z = opt.newton_krylov(f,z0,maxiter=40,f_tol=1e-4,verbose=True)
 
 ts = time()
@@ -96,8 +91,8 @@ z, info, ier, msg = fsolve(f, z0, full_output=True, col_deriv=True)
 print(msg)
 print('Simulation took {0:1.8g} seconds'.format(time()-ts))
 
-xy = simBody.plotPositions(show=False)
+xy = simBody.plotPositions(show=True)
 tipDisp = xy[-1,:]
-gam = np.pi/2-np.arctan2(z[gdl-1]+1,z[gdl-2])
+gam = np.pi/2-np.arctan2(z[gdl-5]+1,z[gdl-6])
 U = simBody.totalStrainEnergy()
-print('dx = {0:1.8e} m   | dy = {1:1.8e} m \ntheta = {2:1.8e} rad| Unorm = {3:3.5e} J'.format(-z[-8]/1000,z[-7]/1000,gam,U/1000))
+print('dx = {0:1.8e} m   | dy = {1:1.8e} m \ntheta = {2:1.8e} rad| Unorm = {3:3.5e} J'.format(-z[-18]/1000,z[-17]/1000,gam,U/1000))

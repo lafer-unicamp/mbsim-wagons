@@ -42,7 +42,8 @@ def viga_balanco():
     n_p = body.totalDof
     n_la = 9
     
-    M = body.assembleMassMatrix()
+    M = np.zeros([n_p,n_p])
+    M[:,:] = body.assembleMassMatrix()
     
     q0 = np.array([0.]*n_p)
     u0 = np.array([0.]*n_p)
@@ -68,14 +69,10 @@ def viga_balanco():
         body.updateDisplacements(p)
         
         fel = body.assembleElasticForceVector().A1
-        
-        body.updateDisplacements(v)
-        
-        fdm = body.assembleElasticForceVector().A1 * 0.002
 
-        fel[-8] = -5.0e5 * 0.5 * 0.5 * 0.5
+        fel[-8] += 5.0e8 * 0.5 * 0.5 * 0.5 * t/0.9 if t < 0.9 else 5.0e8 * 0.5 * 0.5 * 0.5
         
-        return fel+fdm
+        return - fel
     
     def posConst(t,y):
         gC = np.zeros(n_la)
@@ -103,7 +100,7 @@ def viga_balanco():
     return ms(n_p=n_p, forces=forces, n_la=n_la, pos0=q0, vel0=u0,
               lam0=np.zeros(n_la),
               posd0=u0,veld0=0*u0,GT=constJacobian,t0=0.0,
-              mass_matrix = None,
+              mass_matrix = M,
               constr3=posConst,
               constr2=velConst)
 
@@ -111,15 +108,18 @@ def viga_balanco():
 system = viga_balanco()
 problem = system.generate_problem('ind3')
 
-DAE = ODASSL(problem)
+DAE = IDA(problem)
 DAE.report_continuously = True
 DAE.inith = 1e-5
 DAE.num_threads = 6
 DAE.suppress_alg = True
 
+outFreq = 10e3 # Hz
+finalTime = 1.
+
 problem.res(0,problem.y0,problem.yd0)
 
-t,p,v=DAE.simulate(0.01, 1000)
+t,p,v=DAE.simulate(finalTime, finalTime * outFreq)
 
 q = p[:,:system.n_p]
 u = p[:,system.n_p:2*system.n_p]

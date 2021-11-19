@@ -102,7 +102,7 @@ class linearElasticMaterial(material):
 
         '''
         
-        T = np.zeros_like(strainTensor)
+        T = np.zeros_like(strainTensor,dtype=np.float64)
         Tc = T.copy()
        
         
@@ -110,9 +110,10 @@ class linearElasticMaterial(material):
         mu = self.mu
         
         
-        # regular stress tensor
+        
         if T.shape[0] == 2:
             if not split:
+            # regular stress tensor
                 for i in range(2):
                     for j in range(2):
                         T[0,0] = strainTensor[0,0] + self.nu*strainTensor[1,1]
@@ -136,6 +137,36 @@ class linearElasticMaterial(material):
                 Tc[0,0] = nu * ( nu * strainTensor[0,0] + strainTensor[1,1])
                 Tc[1,1] = nu * ( strainTensor[0,0] + nu * strainTensor[1,1])
                 Tc *=  E / ( 1- nu*nu )
+            
+        elif T.shape[0] == 3:
+            if not split:
+            # regular stress tensor
+                for i in range(3):
+                    for j in range(3):
+                        T[0,0] = strainTensor[0,0] + self.nu*strainTensor[1,1]
+                        T[1,1] = self.nu*strainTensor[0,0] + strainTensor[1,1] 
+                        T[1,0] = (1-self.nu) * strainTensor[1,0]
+                        T[0,1] = T[1,0]
+                        T = self.E / (1-self.nu**2) * T
+                    
+                    
+            # locking-free stress tensor
+            else:
+                E = self.E
+                nu = self.nu
+                ks = 10*(1+nu)/(12+11*nu)
+            
+                T = E * strainTensor
+                T[0,1:2] = 2 * ks * mu * strainTensor[0,1:2]
+                T[1,2] = 2 * ks * mu * strainTensor[1,2]
+                T[1,0] = T[0,1]
+                T[2,1] = T[1,2]
+                T[2,0] = T[0,2]
+                
+                Tc[0,0] = 2 * nu * strainTensor[0,0] + strainTensor[1,1] + strainTensor[2,2]
+                Tc[1,1] = strainTensor[0,0] + 2 * nu * strainTensor[1,1] + strainTensor[2,2]
+                Tc[2,2] = strainTensor[0,0] + strainTensor[1,1] + 2 * nu * strainTensor[2,2]
+                Tc *=  E * nu / (( 1 + nu ) * (1 - 2 * nu))
                 
                 
         return T, Tc

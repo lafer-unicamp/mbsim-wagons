@@ -174,12 +174,12 @@ class beamANCFelement3D(object):
         with X_i  in [x,y,z]
              xi_j in [xi_,eta_,zeta_]
         '''
-        dSx1, dSx2, dSx3, dSy1, dSy2, dSy3, dSz1, dSz2, dSz3 = self.shapeFunctionDerivative(xi_,eta_,zeta_)
+        #dSx1, dSx2, dSx3, dSy1, dSy2, dSy3, dSz1, dSz2, dSz3 = self.shapeFunctionDerivative(xi_,eta_,zeta_)
         dS = self.shapeFunctionDerivative(xi_, eta_,zeta_)
         dS = dS.reshape(3,-1)
         
-        M1 = dot([[dSx1, dSx2, dSx3],[dSy1, dSy2, dSy3],[dSz1, dSz2, dSz3]],q).round(16)
-        M2 = dot([dS[:,:nq],dS[:,nq:2*nq],dS[:,2*nq:3*nq]],q).T.round(16)
+        #M1 = dot([[dSx1, dSx2, dSx3],[dSy1, dSy2, dSy3],[dSz1, dSz2, dSz3]],q).round(16)
+        M1 = dot([dS[:,:nq],dS[:,nq:2*nq],dS[:,2*nq:3*nq]],q).T.round(16)
         
         return np.asmatrix(M1)
     
@@ -374,29 +374,34 @@ class beamANCFelement3D(object):
         
         if q == None:
             q = self.qtotal
+            
+        ndof = len(q)
+                  
+        W = self.shapeFunctionDerivative(xi_,eta_,zeta_)
         
-        dSx1, dSx2, dSx3, dSy1, dSy2, dSy3, dSz1, dSz2, dSz3 = self.shapeFunctionDerivative(xi_,eta_,zeta_)
+        W = W.reshape(3,-1)
         
+        Lhat = W.T.dot(W)
+        Qhat = np.zeros([3,3*ndof])
+        
+        for i in range(3):
+                Qhat[i,i*ndof:(i+1)*ndof] = q
+        
+        Qhat = np.dot(invJ0,Qhat)
+        Qhat = np.dot(Qhat,Lhat)
         
         # TODO: separate into threads
         #U11 = np.sum([np.outer(dSx_dxi,dSx_dxi), np.outer(dSy_dxi,dSy_dxi)],axis=0)
         #U12 = np.sum([np.outer(dSx_dxi,dSx_deta), np.outer(dSy_dxi,dSy_deta)], axis=0)
         #U21 = U12.T
-        #U22 = np.sum([np.outer(dSx_deta,dSx_deta), np.outer(dSy_deta,dSy_deta)],axis=0)
-            
-        qU12,qU11,qU22 = 0#dot(q,[U12+U21,2*U11,2*U22])     
+        #U22 = np.sum([np.outer(dSx_deta,dSx_deta), np.outer(dSy_deta,dSy_deta)],axis=0)    
         
-        ndof = len(q)
-        deps_dq = np.zeros((2,2,ndof),dtype=np.float64)
+        
+        deps_dq = np.zeros((3,3,ndof),dtype=np.float64)
              
-        Ucaped = np.zeros([2,2],dtype=np.float64)
 
         for m in range(ndof):
-            Ucaped[0,0] = qU11[m]
-            Ucaped[0,1] = qU12[m]
-            Ucaped[1,0] = qU12[m]
-            Ucaped[1,1] = qU22[m]
-            deps_dq[:,:,m] = 0.5 * dot(dot(invJ0.T,Ucaped),invJ0)
+            deps_dq[:,:,m] = 0.5 * Qhat[:,[m,m+ndof,m+2*ndof]].dot(invJ0)
 
         
        
@@ -417,44 +422,49 @@ class beamANCFelement3D(object):
             q = self.qtotal
         
         # Gauss integration points
-        gaussL = self.gaussIntegrationPoints[2]
-        gaussH = self.gaussIntegrationPoints[2]
+        nGaussL = 2
+        nGaussH = 2
+        gaussL = self.gaussIntegrationPoints[nGaussL]
+        gaussH = self.gaussIntegrationPoints[nGaussH]
         
         # Gauss weights
-        wL = self.gaussWeights[2]
-        wH = self.gaussWeights[2]
+        wL = self.gaussWeights[nGaussL]
+        wH = self.gaussWeights[nGaussH]
         
         
         ndof = len(self.q)
-        Qe = np.asarray([0.]*ndof,dtype=np.float64)                                
+        Qe = np.zeros(ndof,dtype=np.float64)                                
         # selective reduced integration
-        for p in range(len(gaussL)):
+        for p in range(nGaussL):
             'length quadrature'
-            for b in range(len(gaussH)):
+            for b in range(nGaussH):
                 'heigth quadrature'
-                detJ0 = self.loadInitialJacobian(gaussL[p], gaussH[b])[1]
-                deps_dq = self.strainTensorDerivative(gaussL[p], gaussH[b],q)
-                T, Tc = self.parentBody.material.stressTensor(self.strainTensor(gaussL[p], gaussH[b],q),
-                                                              split=True)
-                Tweight = T * detJ0 * wL[p] * wH[b]
-                
-                Qe += np.einsum('ij...,ij',deps_dq,Tweight)
+                for c  in range(nGaussH):
+                    detJ0 = self.loadInitialJacobian(gaussL[p], gaussH[b], gaussH[c])[1]
+                    deps_dq = self.strainTensorDerivative(gaussL[p], gaussH[b],gaussH[c], q)
+                    T, Tc = self.parentBody.material.stressTensor(self.strainTensor(gaussL[p], gaussH[b], gaussH[c],q),
+                                                                  split=True)
+                    # apply wheights to stress tensor
+                    T *=detJ0 * wL[p] * wH[b] * wH[c]
+                    
+                    Qe += np.einsum('ij...,ij',deps_dq,T)
                     
                 
             # end of height quadrature
-            detJ0 = self.loadInitialJacobian(gaussL[p], 0)[1]
-            deps_dq = self.strainTensorDerivative(gaussL[p], 0, q)
-            T, Tc = self.parentBody.material.stressTensor(self.strainTensor(gaussL[p], 0, q),split=True)
-            TcWeight = Tc * detJ0 * wL[p]
-            for m in range(ndof):
-                Qe[m] += np.multiply(deps_dq[:,:,m],TcWeight).sum()
-            #Qe += np.einsum('ij...,ij',deps_dq,Tweight)  
+            detJ0 = self.loadInitialJacobian(gaussL[p], 0, 0)[1]
+            deps_dq = self.strainTensorDerivative(gaussL[p], 0, 0, q)
+            T, Tc = self.parentBody.material.stressTensor(self.strainTensor(gaussL[p], 0, 0, q),split=True)
+            
+            # apply wheights to stressn tensor
+            Tc *= detJ0 * wL[p]
+            Qe += np.einsum('ij...,ij',deps_dq,Tc)
+            #for m in range(ndof):
+            #    Qe[m] += np.multiply(deps_dq[:,:,m],TcWeight).sum()
         # end of integration
             
-        Qe = Qe * W * L * H / 4
+        Qe *= W * L * H / 4
         
         self.nodalElasticForces = Qe
-   
 
         return Qe
     
@@ -471,6 +481,8 @@ class beamANCFelement3D(object):
         
         
         # Gauss integration points
+        nGaussL = 3
+        nGaussH = 3
         gaussL = self.gaussIntegrationPoints[3]
         gaussH = self.gaussIntegrationPoints[3]
         
@@ -486,23 +498,24 @@ class beamANCFelement3D(object):
             'length quadrature'
             for b in range(len(gaussH)):
                 'heigth quadrature'
-                detJ0 = self.loadInitialJacobian(gaussL[p], gaussH[b])[1]
-                eps = self.strainTensor(gaussL[p], gaussH[b],q)
-                T, Tc = self.parentBody.material.stressTensor(eps, split=True)
-                Tweight = T * detJ0 * wL[p] * wH[b]
-                
-                #ts = time()
-                U += abs(np.einsum('ij,ij',eps,Tweight))
-                #print('{0:1.8g}'.format(time()-ts))
+                for c in range(nGaussH):
+                    detJ0 = self.loadInitialJacobian(gaussL[p], gaussH[b], gaussH[c])[1]
+                    eps = self.strainTensor(gaussL[p], gaussH[b], gaussH[c], q)
+                    T, Tc = self.parentBody.material.stressTensor(eps, split=True)
+                    Tweight = T * detJ0 * wL[p] * wH[b] * wH[c]
+                    
+                    #ts = time()
+                    U += 0.5 * abs(np.einsum('ij,ij',eps,Tweight))
+                    #print('{0:1.8g}'.format(time()-ts))
                     
                 
             # end of height quadrature
-            detJ0 = self.loadInitialJacobian(gaussL[p], 0)[1]
-            eps = self.strainTensor(gaussL[p], 0, q)
+            detJ0 = self.loadInitialJacobian(gaussL[p], 0, 0)[1]
+            eps = self.strainTensor(gaussL[p], 0, 0, q)
             T, Tc = self.parentBody.material.stressTensor(eps,split=True)
             TcWeight = Tc * detJ0 * wL[p]
             for m in range(ndof):
-                U += abs(np.multiply(eps,TcWeight).sum()) 
+                U += 0.5 * abs(np.multiply(eps,TcWeight).sum()) 
         # end of integration
             
         U *= W * L * H / 8
@@ -742,10 +755,10 @@ if __name__ == '__main__':
     rod = flexibleBody.flexibleBody('Rod',steel)
 
     # comprimentos
-    Lrod = 150.0e-3
+    Lrod = 100.0e-3
 
     # seção transversal
-    h = 6.0e-3
+    h = 10.0e-3
 
     # gravidade
     g = [0,-9.810]
@@ -763,8 +776,16 @@ if __name__ == '__main__':
     rod.addElement(elemA)
     M = rod.assembleMassMatrix()
     G = rod.assembleWeightVector(g=[0,1,0])
+    
+    elemA[0].strainTensorDerivative(1,0,0)
+    
+    # force deformation
+    elemA[1].nodes[2].q[0] = 0.01e-3
+    elemA[1].nodes[1].q[0] = 0.01e-3 * 0.75
+    elemA[1].nodes[0].q[0] = 0.01e-3 * 0.50
+    elemA[0].nodes[1].q[0] = 0.01e-3 * 0.25
 
-
+    F = rod.assembleElasticForceVector()
 
 
     

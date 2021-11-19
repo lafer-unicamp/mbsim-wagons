@@ -121,7 +121,7 @@ def biela_manivela():
         
         return forcas
     def GT(q):
-        Phi = np.zeros([5,q.shape[0]])
+        Phi = np.zeros([n_la,q.shape[0]])
         w = np.zeros(Phi.shape[0])
         
         # PINO ENTRE MANIVELA E BIELA
@@ -208,6 +208,7 @@ DAE.inith = 1e-3
 DAE.num_threads = 4
 DAE.suppress_alg = True
 
+r0 = bm.res(0,bm.y0,bm.yd0)
 t,p,v=DAE.simulate(3 * np.pi / 150, 1000)
 
 q = p[:,:bm_sys.n_p]
