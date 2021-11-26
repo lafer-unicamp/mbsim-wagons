@@ -21,7 +21,7 @@ body = flexibleBody3D('Bar',steel)
 
 
 nq = []
-nel = 4
+nel = 8
 totalLength = 2000.
 for i in range(nel+1):
     nq.append(node([totalLength * i/nel,0.0,0.0
@@ -38,6 +38,7 @@ g = np.matrix([[0.0,-9.81]])
 
 body.addElement(eq)
 body.assembleMassMatrix()
+
 
 #Kt = body.assembleTangentStiffnessMatrix()
 

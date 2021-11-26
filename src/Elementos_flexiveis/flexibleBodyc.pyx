@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Fri Sep  3 06:35:10 2021
+Cython version of flexible body
+
+Created on Fri Nov 26 07:35:58 2021
 
 @author: leonardo
 """
@@ -11,7 +13,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 ########################################
-class flexibleBody(object):
+cdef class flexibleBody(object):
     '''
     Flexible body class
     '''
@@ -54,12 +56,16 @@ class flexibleBody(object):
         print('Assemblying mass matrix')
          
         M = np.matlib.zeros([self.totalDof, self.totalDof])
+        cdef double[:,:] M_view = M
+        cdef double[:,:] m
+        
+        cdef Py_ssize_t i, j, dofi, dofj
         
         for elem in self.elementList:
             m = elem.getMassMatrix()
             for i,dofi in enumerate(elem.globalDof):
                 for j,dofj in enumerate(elem.globalDof):
-                    M[dofi,dofj] += m[i,j]
+                    M_view[dofi,dofj] += m[i,j]
             
         print('Mass matrix assembly done!')
         return M
@@ -67,7 +73,11 @@ class flexibleBody(object):
     
     def assembleElasticForceVector(self,targetDof = None):
         
-        Qe = np.matlib.zeros(self.totalDof)
+        Qe = np.zeros(self.totalDof)
+        cdef double[:] Qe_view = Qe 
+        cdef double[:] Qelem
+        
+        cdef Py_ssize_t i, dof
         
         for elem in self.elementList:
             if elem.changedStates:
@@ -76,7 +86,7 @@ class flexibleBody(object):
                 #Qelem = elem.nodalElasticForces
                 Qelem = elem.getNodalElasticForces()
             for i,dof in enumerate(elem.globalDof):
-                Qe[0,dof] += Qelem[i]
+                Qe_view[dof] += Qelem[i]
             
         return Qe.reshape(-1,1)
     
