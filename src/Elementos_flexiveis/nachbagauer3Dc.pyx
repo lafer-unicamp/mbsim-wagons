@@ -22,6 +22,9 @@ import numpy as np
 from numpy.matlib import matrix, eye
 from numpy import dot
 from numpy.linalg import norm, inv
+cimport cython
+
+@cython.boundscheck(False)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #         3D NODE                                                             %
@@ -206,6 +209,152 @@ cdef class beamANCFelement3D(object):
         return self.length * self.height * self.width * self.parentBody.material.rho
     
     
+    def getBoundingBox(self):
+        '''
+        Get element bounding box. Usefull to check for contact points.
+        
+        TODO: need to consider width and height too
+        
+        Based on the idea from  
+        G. H. C. Silva, R. Le Riche, J. Molimard, e A. Vautrin, 
+        “Exact and efficient interpolation using finite
+        elements shape functions”, 
+        European Journal of Computational Mechanics, vol. 18, nº 3–4, 
+        p. 307–331, jan. 2009, doi: 10.3166/ejcm.18.307-331.
+
+
+        Returns
+        -------
+        coords : list
+            list min and max values for nodes coordinates
+
+        '''
+        cdef double xmin, xmax, ymin, ymax, zmin, zmax, x, y, z
+        cdef Py_ssize_t i,j,k
+        cdef list virtualNodes = []
+        
+        for i in [-1,1]:
+            for j in [-1,1]:
+                for k in [-1,1]:
+                    virtualNodes.append(self.interpolatePosition(i,j,k))
+        
+        xmin, ymin, zmin = virtualNodes[0].tolist()
+        
+        xmax = xmin
+        ymax = ymin
+        zmax = zmin
+        
+        for i in range(1,len(virtualNodes)):
+            x, y, z = virtualNodes[i].tolist()
+            if xmin > x:
+                xmin = x
+            if xmax < x:
+                xmax = x
+            if ymin > y:
+                ymin = y
+            if ymax < y:
+                ymax = y
+            if zmin > z:
+                zmin = z
+            if zmax < z:
+                zmax = z
+        
+        return xmin, ymin, zmin, xmax, ymax, zmax
+        
+        
+    
+    
+    def isPointOnMe(self, double[:] P):
+        '''
+        Check whether a point P belongs to the object bounding box
+
+        Parameters
+        ----------
+        double[ : ] P
+            DESCRIPTION.
+
+        Returns
+        -------
+        ispom : boolean
+            returns True if the point is inside de bounding box.
+
+        '''
+        cdef double xmin, ymin, zmin, xmax, ymax, zmax
+        
+        xmin, ymin, zmin, xmax, ymax, zmax = self.getBoundingBox()
+        
+        if P[0] > xmax:
+            return False
+        elif P[1] > ymax:
+            return False
+        elif P[2] > zmax:
+            return False
+        elif P[0] < xmin:
+            return False
+        elif P[1] < ymin:
+            return False
+        elif P[2] < zmin:
+            return False
+        else:
+            # TODO: check cross product before issuing True
+            return True
+    
+    def mapToLocalCoords(self, double[:] point, double tol = 1e-5):
+        '''
+        Maps a global point P into local coordinates
+
+        Parameters
+        ----------
+        double[ : ] point
+            global coordinates of a point that is to be mapped locally.
+
+        Returns
+        -------
+        localP : array
+            local coordinates of the point.
+
+        '''
+        
+        if not self.isPointOnMe(point):
+            print('Error: specified point is not inside the bounding box of this element')
+            return 0
+        
+        cdef double L,H,W
+        cdef Py_ssize_t i
+        cdef long maxiter
+        
+        # initialize local variables
+        maxiter = 20
+        
+        L = self.length
+        H = self.height
+        W = self.width
+        
+        xi_view = np.zeros(3)
+        dxi = xi_view
+        p = np.array(point)
+        
+        for i in range(maxiter):
+            xi_view += dxi
+                       
+            rn = self.interpolatePosition(xi_view[0],xi_view[1],xi_view[2])
+            res = p - rn
+            if np.all(np.abs(res)<tol):
+                break
+
+            J_view = self.getJacobian(xi_view[0],xi_view[1],xi_view[2]).reshape(3,-1)
+            # scaling factors:
+            J_view[0] *= L/2
+            J_view[1] *= H/2
+            J_view[2] *= W/2
+            
+            dxi = np.linalg.solve(J_view,res)
+        
+        
+        return xi_view
+        
+    
+    
     def interpolatePosition(self,double xi_, double eta_, double zeta_):
         """
         Returns the interpolated position given the non-dimensional parameters
@@ -217,8 +366,10 @@ cdef class beamANCFelement3D(object):
         return r
     
     
+    
     def getJacobian(self, double xi_, double eta_, double zeta_, double [:] q = None):
         '''
+        Jacobian of the absolute position vector dr/dxi
         
 
         Parameters
@@ -234,8 +385,8 @@ cdef class beamANCFelement3D(object):
 
         Returns
         -------
-        BLOCK MATRIX
-            JACOBIAN CALCULATED AT (xi_, eta_,zeta_) under coordinates q.
+        Matrix
+            JACOBIAN CALCULATED AT (xi_, eta_,zeta_) under nodal coordinates q.
 
         '''
         
@@ -250,8 +401,7 @@ cdef class beamANCFelement3D(object):
              xi_j in [xi_,eta_,zeta_]
         '''
         
-        dS = self.shapeFunctionDerivative(xi_, eta_,zeta_)
-        dS = dS.reshape(3,-1)
+        dS = self.shapeFunctionDerivative(xi_, eta_,zeta_).reshape(3,-1)
         
         #M1 = dot([[dSx1, dSx2, dSx3],[dSy1, dSy2, dSy3],[dSz1, dSz2, dSz3]],q).round(16)
         M1 = dot([dS[:,:nq],dS[:,nq:2*nq],dS[:,2*nq:3*nq]],q).T.round(16)
@@ -386,6 +536,8 @@ cdef class beamANCFelement3D(object):
         Q0 = self.getNodalElasticForces()
         
         cdef double[:] qmod
+        cdef Py_ssize_t i
+        cdef double curDof
         
         for nd in self.nodes:
             qmod = nd.q.copy()
@@ -743,7 +895,7 @@ cdef class beamANCF3Dquadratic(beamANCFelement3D):
         Shape functions respect the order of the nodes: 1, intermediate, 2
         '''
         cdef double eta = eta_ * self.height / 2
-        cdef double zeta = zeta_ * self.height / 2
+        cdef double zeta = zeta_ * self.width / 2
         
         #first node
         cdef double S1 = - xi_/2 * (1-xi_)
@@ -858,6 +1010,146 @@ cdef class beamANCF3Dquadratic(beamANCFelement3D):
         
         return Qg.reshape(1,-1)
 
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#         QUADRATIC RAIL ELEMENT                                              %
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%   
+cdef class railANCF3Dquadratic(beamANCF3Dquadratic):
+    """
+    Planar finite element with quadratic interpolation
+    """
+     
+    def __init__(self, node1, node2, double _height, double _width):
+        self.length = norm(node1.qtotal[0:2] - node2.qtotal[0:2])
+        self.height = _height
+        self.width = _width
+        intermediateNode = node()
+        intermediateNode.q0 = np.array([(a+b)*0.5 for a,b in zip(node1.q0,node2.q0)])
+        self.nodes = [node1,intermediateNode,node2]
+        self.J0, self.invJ0, self.detJ0 = self.saveInitialJacobian()
+        self.nodalElasticForces = np.zeros(27,dtype=np.float64)
+        # boolean flag that checks if the state had changed recently
+        self.changedStates = np.bool8(True) 
+  
+    def shapeFunctionMatrix(self, double xi_, double eta_, double zeta_):
+        '''
+        Shape functions respect the order of the nodes: 1, intermediate, 2
+        '''
+        cdef double eta = eta_ * self.height / 2
+        cdef double zeta = zeta_ * self.width / 2
+        
+        #first node
+        cdef double S1 = - xi_/2 * (1-xi_)
+        cdef double S2 = eta * S1
+        cdef double S3 = zeta * S1
+        #middle node
+        cdef double S4 = 1 - xi_*xi_
+        cdef double S5 = eta*S4
+        cdef double S6 = zeta*S4
+        #last node
+        cdef double S7 = xi_/2 * (1+xi_)
+        cdef double S8 = eta * S7
+        cdef double S9 = zeta * S7
+        
+        I = np.eye(3,dtype=np.float64)
+        
+        return np.concatenate((S1*I,S2*I,S3*I,S4*I,S5*I,S6*I,S7*I,S8*I,S9*I),
+                              axis=1)
+    
+    def shapeFunctionDerivative(self,double xi_, double eta_, double zeta_):
+        """
+
+        Parameters
+        ----------
+        xi_: DOUBLE
+            Longitudinal position
+        eta_: DOUBLE 
+            Lateral position
+        zeta_: DOUBLE
+            Vertical positiion
+
+        Returns
+        -------
+        List of derivatives
+        
+        dSx1, dSx2, dSx3, dSy1, dSy2, dSy3, dSz1, dSz2, dSz3
+        
+        dSx1 = dSx/dxi      dSy1 = dSy/dxi      dSz1 = dSz/dxi
+        dSx2 = dSx/deta     dSy2 = dSy/deta     dSz2 = dSz/deta
+        dSx3 = dSx/dzeta    dSy3 = dSy/dzeta    dSz3 = dSz/dzeta
+
+        """
+        cdef double L = self.length
+        cdef double eta = eta_ * self.height / 2
+        cdef double zeta = zeta_ * self.width / 2
+        
+        # reusable variables
+        cdef double s1,s2,s3 
+        s1 = (-1 + 2*xi_)/L
+        s2 = (-4*xi_)/L
+        s3 = (1 + 2*xi_)/L
+              
+        I = np.eye(3)
+        
+        dS = np.zeros([9,27],dtype=np.float64)
+        cdef double[:,:] dS_view = dS
+        
+        
+        cdef Py_ssize_t i
+        for i in range(3):
+                dS_view[i,i] = s1
+                dS_view[i,i+3] = s1*eta
+                dS_view[i,i+6] = s1*zeta
+                dS_view[i,i+9] = s2
+                dS_view[i,i+12] = s2*eta
+                dS_view[i,i+15] = s2*zeta
+                dS_view[i,i+18] = s3
+                dS_view[i,i+21] = s3*eta
+                dS_view[i,i+24] = s3*zeta
+                
+                # derivative wrt eta
+                dS_view[i+3,i+3] = xi_*(-1+xi_)/2
+                dS_view[i+3,i+12] = (1-xi_*xi_)
+                dS_view[i+3,i+21] = xi_*(1+xi_)/2
+                
+                # derivative wrt xeta
+                dS_view[i+6,i+6] = dS_view[i+3,i+3]
+                dS_view[i+6,i+15] = dS_view[i+3,i+12]
+                dS_view[i+6,i+24] = dS_view[i+3,i+21]
+        
+
+        
+        return dS
+    
+    
+    
+    def getWeightNodalForces(self,grav=[0,-1.,0]):
+        '''
+        Get nodal forces due to weight
+        
+        TODO: currently only for initially straight beams
+
+        Parameters
+        ----------
+        grav : array like
+            gravity acceleration.
+
+        Returns
+        -------
+        Qg : array
+            nodal forces.
+
+        '''
+        cdef double L = self.length
+        cdef double H = self.height
+        cdef double W = self.width
+        Qg =  L * H * W * 0.25 *  0.3333 * dot(grav, matrix([
+            [2, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0]],
+            dtype=np.float64))*eye(len(self.q))*self.parentBody.material.rho
+        
+        return Qg.reshape(1,-1)
 
 
 

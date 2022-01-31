@@ -5,9 +5,9 @@ Created on Thu Nov 11 07:24:43 2021
 
 @author: leonardo
 """
-from nachbagauer3D import node, beamANCF3Dquadratic
+from nachbagauer3Dc import node, beamANCF3Dquadratic
 from materials import linearElasticMaterial
-from flexibleBody import flexibleBody3D
+from flexibleBodyc import flexibleBody3D
 import numpy as np
 from scipy.optimize import fsolve
 from time import time
@@ -21,7 +21,7 @@ body = flexibleBody3D('Bar',steel)
 
 
 nq = []
-nel = 8
+nel = 4
 totalLength = 2000.
 for i in range(nel+1):
     nq.append(node([totalLength * i/nel,0.0,0.0
@@ -63,7 +63,7 @@ def f(z):
     x = z[0:ndof]
     lam = z[ndof:]
     
-    simBody.updateDisplacements(x)
+    simBody.updateDisplacements(np.array(x))
             
     Qe = simBody.assembleElasticForceVector()
     Qelist.append(Qe.T)

@@ -18,6 +18,9 @@ cdef class flexibleBody(object):
     Flexible body class
     '''
     
+    
+    cdef list elementList
+    
     def __init__(self,name,material):
         '''
         Flex body initialization method
@@ -51,6 +54,21 @@ cdef class flexibleBody(object):
             mass += e.mass
             
         return mass
+    
+    @property
+    def q(self):
+        cdef double [:] q, qel
+        cdef Py_ssize_t [:] eleDof_view     #memory view of element's global dof
+        cdef Py_ssize_t i
+        q = np.zeros(self.totalDof, dtype=np.float64)
+        
+        for ele in self.elementList:
+            qel = ele.q
+            eleDof_view = ele.globalDof
+            for i in range(qel.shape[0]):
+                q[eleDof_view[i]] = qel[i]
+        
+        return np.array(q)
                 
     def assembleMassMatrix(self):
         print('Assemblying mass matrix')
@@ -71,7 +89,7 @@ cdef class flexibleBody(object):
         return M
     
     
-    def assembleElasticForceVector(self,targetDof = None):
+    def assembleElasticForceVector(self,int targetDof = -1):
         
         Qe = np.zeros(self.totalDof)
         cdef double[:] Qe_view = Qe 
@@ -148,7 +166,7 @@ cdef class flexibleBody(object):
         print('Added {0} elements to body ''{1:s}'''.format(len(element),self.name))
         
         
-    def plotPositions(self, pointsPerElement = 5, show=False):
+    def plotPositions(self, int pointsPerElement = 5, bint show=False):
         points = np.linspace(-1.,1.,pointsPerElement)
         
         xy = np.empty([0,self.dimensionality])
@@ -177,7 +195,7 @@ cdef class flexibleBody(object):
                 plt.show()
         return xy
     
-    def updateDisplacements(self,z):
+    def updateDisplacements(self, double [:] z):
         '''
         Updates the positions of the body nodes
 
@@ -191,21 +209,23 @@ cdef class flexibleBody(object):
         None.
 com
         '''
-        changedDof = np.zeros(z.shape,dtype=np.bool8)
+        
+        cdef Py_ssize_t i
+        cdef Py_ssize_t [:] globDof_view
+        cdef double[:] newq
         
         for ele in self.elementList:
             # cycle through nodes
             for nd in ele.nodes:
-                changedDof[nd.globalDof] += not np.allclose(nd.q,z[nd.globalDof],
-                                                            atol=1e-12,rtol=1e-8)
-                nd.q = z[nd.globalDof]
+                newq = nd.q
+                globDof_view = nd.globalDof
+                for i in range(newq.shape[0]):
+                    newq[i] = z[globDof_view[i]]
+                nd.q = newq
             # finished cycling through nodes
             
-        for ele in self.elementList:
-            ele.changedStates = False # to avoid the element being constantly activated
-            if any(changedDof[ele.globalDof] == True):
-                ele.changedStates = True
-    
+
+               
             
     
     def totalStrainEnergy(self):
@@ -216,6 +236,31 @@ com
             U += ele.strainEnergyNorm()
             
         return U
+    
+    def findElement(self, double[:] point):
+        '''
+        Finds to which element a point belongs
+
+        Parameters
+        ----------
+        double[ : ] point
+            global coordinates of a point.
+
+        Returns
+        -------
+        ele : integer
+            the number of the element. -1 if no element found
+
+        '''
+        cdef Py_ssize_t ele = -1
+        cdef Py_ssize_t i
+        
+        for i in range(len(self.elementList)):
+            if self.elementList[i].isPointOnMe(point):
+                ele = i
+            
+        
+        return ele
 
 
 ##############################################################################

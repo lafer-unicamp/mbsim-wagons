@@ -16,7 +16,7 @@ import flexibleBody, materials
 
 [xi,xi_,eta,zeta,L,H,W] =symbols(['xi','xi_','eta','zeta','L','H','W'])
 varList = []
-for i in range(12):
+for i in range(27):
     varList.append('q[{}]'.format(i))
 q = symbols(varList)
 q = Matrix(q)
