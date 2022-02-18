@@ -29,7 +29,7 @@ cimport cython
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #         3D NODE                                                             %
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%   
-cdef class node(object):    
+cdef public class node[object c_PyObj, type c_PyObj_t]:    
     
     cdef double [9] q0
     cdef double [9] q
@@ -150,14 +150,24 @@ cdef class beamANCFelement3D(object):
         return {1:[0],
                 2:[-1.0/np.sqrt(3),1.0/np.sqrt(3)],
                 3:[-0.7745967, 0, 0.7745967],
-                4:[-0.86113631,-0.33998104,0.33998104,0.86113631]}
+                4:[-0.86113631,-0.33998104,0.33998104,0.86113631],
+                5:[-0.90618,-0.538469,0.0,0.538469,0.90618]}
+    
+    @property
+    def simpsonIntegrationPoints(self):
+        return {4:[-1.,-0.33333,0.33333,1.]}
     
     @property
     def gaussWeights(self): 
         return {1:[2],
                 2:[1,1],
                 3:[0.555556, 0.888889, 0.555556],
-                4:[0.33998104,0.6521451549,0.6521451549,0.33998104]}
+                4:[0.33998104,0.6521451549,0.6521451549,0.33998104],
+                5:[0.236927,0.478629,0.568889,0.478629,0.236927]}
+    
+    @property
+    def simpsonWeights(self):
+        return {4:[0.125,0.375,0.375,0.125]}
     
     @property
     def qtotal(self):
@@ -280,20 +290,21 @@ cdef class beamANCFelement3D(object):
 
         '''
         cdef double xmin, ymin, zmin, xmax, ymax, zmax
+        cdef tol = 1e-4 * self.length
         
         xmin, ymin, zmin, xmax, ymax, zmax = self.getBoundingBox()
         
-        if P[0] > xmax:
+        if P[0] > xmax + tol:
             return False
-        elif P[1] > ymax:
+        elif P[1] > ymax + tol:
             return False
-        elif P[2] > zmax:
+        elif P[2] > zmax + tol:
             return False
-        elif P[0] < xmin:
+        elif P[0] < xmin - tol:
             return False
-        elif P[1] < ymin:
+        elif P[1] < ymin - tol:
             return False
-        elif P[2] < zmin:
+        elif P[2] < zmin - tol:
             return False
         else:
             # TODO: check cross product before issuing True
@@ -650,6 +661,7 @@ cdef class beamANCFelement3D(object):
         return deps_dq 
     
     
+   
     def getNodalElasticForces(self,double [:] q = None):
         
         
@@ -1016,13 +1028,57 @@ cdef class beamANCF3Dquadratic(beamANCFelement3D):
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%   
 cdef class railANCF3Dquadratic(beamANCF3Dquadratic):
     """
-    Planar finite element with quadratic interpolation
+    Planar finite element with quadratic interpolation adapted to TR-68 rail
     """
+    
+    
+    ''' Properties' declarations'''
+    
+    cdef double centroidHeightFromBase
+    cdef double baseHeight
+    cdef double headHeight
+    cdef double webHeight
      
-    def __init__(self, node1, node2, double _height, double _width):
+    def __init__(self, node1, node2, 
+                 double _height, 
+                 double _width, 
+                 double _hc,
+                 double _hb,
+                 double _hh):
+        '''
+        
+
+        Parameters
+        ----------
+        node1 : node
+            First element node.
+        node2 : node
+            Second element node.
+        double _height : double
+            Total height of the cross section.
+        double _width : double
+            Maximum width of the cross section.
+        double _hc : double
+            Centroid height
+        double _hb : double
+            Rail base height.
+        double _hh : double
+            Rail head height.
+
+        Returns
+        -------
+        None.
+
+        '''
         self.length = norm(node1.qtotal[0:2] - node2.qtotal[0:2])
         self.height = _height
+        # rail width varies with height
         self.width = _width
+        self.baseHeight = _hb
+        self.headHeight = _hh
+        self.webHeight = _height - _hb - _hh
+        # centroid height
+        self.centroidHeightFromBase = _hc
         intermediateNode = node()
         intermediateNode.q0 = np.array([(a+b)*0.5 for a,b in zip(node1.q0,node2.q0)])
         self.nodes = [node1,intermediateNode,node2]
@@ -1030,13 +1086,113 @@ cdef class railANCF3Dquadratic(beamANCF3Dquadratic):
         self.nodalElasticForces = np.zeros(27,dtype=np.float64)
         # boolean flag that checks if the state had changed recently
         self.changedStates = np.bool8(True) 
+        
+ 
+    def getWidth(self, double eta_ = -1):
+        # based on an equivalent section to TR68 rail
+
+        cdef double heiFromFoot = self.height / 2 * (1 + eta_)
+         
+        if heiFromFoot < self.baseHeight:
+            return 135.605e-3
+        elif heiFromFoot < (self.baseHeight + self.webHeight):
+            return 23.815e-3
+        else:
+            return 78.339e-3
+        
+        
+    def getNodalElasticForces(self,double [:] q = None):
+        '''
+        Overrides base class method
+
+        Parameters
+        ----------
+        double [ : ] q, optional
+            DESCRIPTION. The default is None.
+
+        Returns
+        -------
+        Qe : TYPE
+            DESCRIPTION.
+
+        '''
+        
+        # beam geometry
+        cdef double L = self.length
+        cdef double H = self.height
+        cdef double W = self.width
+        cdef double etaHc = 2 * self.centroidHeightFromBase/H - 1       # centroid height in element specficic coordinates
+        
+        # TODO use composite quadrature rules to integrate over different sections
+   
+        if q == None:
+            q = self.qtotal
+        
+        # Gauss integration points
+        cdef long nGaussL = 2
+        cdef long nGaussH = 2
+        cdef long nGaussW = 2
+        cdef list gaussL = self.gaussIntegrationPoints[nGaussL]
+        cdef list gaussH = self.gaussIntegrationPoints[nGaussH]
+        cdef list gaussW = self.gaussIntegrationPoints[nGaussW]
+        
+        # Gauss weights
+        cdef list wL = self.gaussWeights[nGaussL]
+        cdef list wH = self.gaussWeights[nGaussH]
+        cdef list wW = self.gaussWeights[nGaussW]
+        
+        
+        cdef long ndof = len(self.q)
+        Qe = np.zeros(ndof,dtype=np.float64)
+
+        cdef double[:,:] T, Tc
+        cdef double[:,:,:] deps_dq
+        cdef double detJ0
+        
+        cdef Py_ssize_t p,b,c
+                              
+        # selective reduced integration
+        for p in range(nGaussL):
+            'length quadrature'
+            for b in range(nGaussH):
+                'heigth quadrature'
+                # gets the correct width
+                W = self.getWidth(gaussH[b])
+                for c  in range(nGaussW):  
+                    detJ0 = self.loadInitialJacobian(gaussL[p], gaussH[b], gaussW[c])[1]
+                    deps_dq = self.strainTensorDerivative(gaussL[p], gaussH[b],gaussW[c], q)
+                    # integration weights get applied to stress tensor in the following
+                    T = self.parentBody.material.stressTensor(
+                        self.strainTensor(gaussL[p], gaussH[b], gaussW[c],q),
+                        split=True)[0] * detJ0 * wL[p] * wH[b] * wW[c]
+                    
+                    Qe += np.einsum('ij...,ij',deps_dq,T) * W
+                    
+                
+            # end of height quadrature
+            detJ0 = self.loadInitialJacobian(gaussL[p], etaHc, 0)[1]
+            deps_dq = self.strainTensorDerivative(gaussL[p], etaHc, 0, q)
+            # integration weights get applied to stress tensor in the following
+            Tc = self.parentBody.material.stressTensor(
+                self.strainTensor(gaussL[p], etaHc, 0, q),split=True)[1] * detJ0 * wL[p]
+            
+            Qe += np.einsum('ij...,ij',deps_dq,Tc) * W
+
+        # end of integration
+            
+        Qe *= L * H / 4
+        
+        self.nodalElasticForces = Qe
+
+        return Qe
+
   
     def shapeFunctionMatrix(self, double xi_, double eta_, double zeta_):
         '''
         Shape functions respect the order of the nodes: 1, intermediate, 2
         '''
         cdef double eta = eta_ * self.height / 2
-        cdef double zeta = zeta_ * self.width / 2
+        cdef double zeta = zeta_ * self.getWidth(eta_) / 2
         
         #first node
         cdef double S1 = - xi_/2 * (1-xi_)
@@ -1081,7 +1237,7 @@ cdef class railANCF3Dquadratic(beamANCF3Dquadratic):
         """
         cdef double L = self.length
         cdef double eta = eta_ * self.height / 2
-        cdef double zeta = zeta_ * self.width / 2
+        cdef double zeta = zeta_ * self.getWidth(eta_) / 2
         
         # reusable variables
         cdef double s1,s2,s3 

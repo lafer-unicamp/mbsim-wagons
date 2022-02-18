@@ -12,7 +12,7 @@ Created on Wed Dec  1 06:45:14 2021
 
 @author: leonardo
 """
-from nachbagauer3Dc import node, beamANCF3Dquadratic
+from nachbagauer3Dc import node, railANCF3Dquadratic
 from materials import linearElasticMaterial
 from flexibleBodyc import flexibleBody3D
 import numpy as np
@@ -36,7 +36,12 @@ for i in range(nel+1):
 
 eq = []
 for j in range(nel):
-    eq.append(beamANCF3Dquadratic(nq[j],nq[j+1],0.18575,0.0734))
+    eq.append(railANCF3Dquadratic(nq[j],nq[j+1],
+                                  0.18575,
+                                  6*0.0254,
+                                  0.0805,
+                                  0.022147,
+                                  0.032165))
 
 body.addElement(eq)
 
@@ -84,11 +89,11 @@ def viga_biengastada():
         
         # effect of moving force
         pos = 2.*t
-        # force application point
+        
         point = np.array([pos,0.,0.])
-        # to which element point belongs    
+            
         isit = body.findElement(point)
-        # 
+        
         localXi = eq[isit].mapToLocalCoords(point)
         
         extForce = np.dot(movForce, eq[isit].shapeFunctionMatrix(localXi[0],localXi[1],localXi[2]))
@@ -163,4 +168,4 @@ for i in np.arange(0, 10001,2000):
     a = body.plotPositions()
     plt.plot(a[:,0],a[:,1], label='{:.2f} s'.format(t[i]))
 plt.legend()
-plt.title("Viga retangular")
+plt.title("Trilho TR 68")

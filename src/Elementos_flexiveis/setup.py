@@ -14,5 +14,6 @@ setup(
     ext_modules = cythonize(["nachbagauer3Dc.pyx",
                              "flexibleBodyc.pyx",
                              "teste_estatico_3D_cython.pyx"],
-                            language_level=3)
+                            language_level=3,
+                            language='c++')
 )
