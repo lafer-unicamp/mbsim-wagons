@@ -149,24 +149,26 @@ cdef class beamANCFelement3D(object):
     def gaussIntegrationPoints(self):
         return {1:[0],
                 2:[-1.0/np.sqrt(3),1.0/np.sqrt(3)],
-                3:[-0.7745967, 0, 0.7745967],
+                3:[-0.77459667, 0, 0.77459667],
                 4:[-0.86113631,-0.33998104,0.33998104,0.86113631],
-                5:[-0.90618,-0.538469,0.0,0.538469,0.90618]}
+                5:[-0.90617985,-0.53846931,0.0,0.53846931,0.90617985],
+                6:[-0.93246951,-0.66120938,-0.23861919,0.23861919,0.66120938,0.93246951]}
     
     @property
-    def simpsonIntegrationPoints(self):
-        return {4:[-1.,-0.33333,0.33333,1.]}
+    def lobattoIntegrationPoints(self):
+        return {4:[-1.,-0.333333,0.333333,1.]}
     
     @property
     def gaussWeights(self): 
         return {1:[2],
                 2:[1,1],
-                3:[0.555556, 0.888889, 0.555556],
-                4:[0.33998104,0.6521451549,0.6521451549,0.33998104],
-                5:[0.236927,0.478629,0.568889,0.478629,0.236927]}
+                3:[0.5555556, 0.8888889, 0.5555556],
+                4:[0.3478548,0.6521452,0.6521452,0.3478548],
+                5:[0.2369269,0.4786287,0.5688889,0.4786287,0.2369269],
+                6:[0.1713245,0.3607616,0.4679139,0.4679139,0.3607616,0.1713245]}
     
     @property
-    def simpsonWeights(self):
+    def lobattoWeights(self):
         return {4:[0.125,0.375,0.375,0.125]}
     
     @property
@@ -1121,7 +1123,16 @@ cdef class railANCF3Dquadratic(beamANCF3Dquadratic):
         cdef double L = self.length
         cdef double H = self.height
         cdef double W = self.width
-        cdef double etaHc = 2 * self.centroidHeightFromBase/H - 1       # centroid height in element specficic coordinates
+        cdef double WB = 135.605e-3
+        cdef double WW = 23.815e-3
+        cdef double WH = 78.339e-3
+        cdef double HB = self.baseHeight
+        cdef double HW = self.webHeight
+        cdef double HH = self.headHeight
+        cdef double etaHc = 2 * self.centroidHeightFromBase / H - 1       # centroid height in element specficic coordinates
+        cdef double etaHb = 2 * self.baseHeight / H - 1
+        cdef double etaHw = 2 * self.baseHeight / H - 4 * self.webHeight - 1
+        cdef double etaHh = - 2 * self.headHeight / H + 1
         
         # TODO use composite quadrature rules to integrate over different sections
    
@@ -1132,10 +1143,16 @@ cdef class railANCF3Dquadratic(beamANCF3Dquadratic):
         cdef long nGaussL = 2
         cdef long nGaussH = 2
         cdef long nGaussW = 2
+        
         cdef list gaussL = self.gaussIntegrationPoints[nGaussL]
         cdef list gaussH = self.gaussIntegrationPoints[nGaussH]
         cdef list gaussW = self.gaussIntegrationPoints[nGaussW]
         
+        # height of the sections
+        cdef double etaBase = self.baseHeight / self.height
+        cdef double etaWeb = self.webHeight / self.height
+        cdef double etaHead = self.headHeight / self.height
+              
         # Gauss weights
         cdef list wL = self.gaussWeights[nGaussL]
         cdef list wH = self.gaussWeights[nGaussH]
@@ -1145,46 +1162,115 @@ cdef class railANCF3Dquadratic(beamANCF3Dquadratic):
         cdef long ndof = len(self.q)
         Qe = np.zeros(ndof,dtype=np.float64)
 
-        cdef double[:,:] T, Tc
-        cdef double[:,:,:] deps_dq
-        cdef double detJ0
+        # cdef double[:,:] T, Tc
+        # cdef double[:,:,:] deps_dq
+        # cdef double detJ0
+        intPoints = np.empty(3)
+        weights = np.empty(3)
+        cdef double[:] ip_v, w_v
+        ip_v = intPoints
+        w_v = weights
         
         cdef Py_ssize_t p,b,c
                               
         # selective reduced integration
         for p in range(nGaussL):
             'length quadrature'
-            for b in range(nGaussH):
-                'heigth quadrature'
-                # gets the correct width
-                W = self.getWidth(gaussH[b])
-                for c  in range(nGaussW):  
-                    detJ0 = self.loadInitialJacobian(gaussL[p], gaussH[b], gaussW[c])[1]
-                    deps_dq = self.strainTensorDerivative(gaussL[p], gaussH[b],gaussW[c], q)
-                    # integration weights get applied to stress tensor in the following
-                    T = self.parentBody.material.stressTensor(
-                        self.strainTensor(gaussL[p], gaussH[b], gaussW[c],q),
-                        split=True)[0] * detJ0 * wL[p] * wH[b] * wW[c]
+            for c in range(nGaussW):
+                'width quadrature'
+                for b  in range(nGaussH):  
+                    # gets the correct width
+                    ip_v[0] = gaussL[p]
+                    ip_v[2] = gaussW[c]
                     
-                    Qe += np.einsum('ij...,ij',deps_dq,T) * W
+                    w_v[0] = wL[p]
+                    w_v[1] = wH[b]
+                    w_v[2] = wW[c]
                     
-                
-            # end of height quadrature
-            detJ0 = self.loadInitialJacobian(gaussL[p], etaHc, 0)[1]
-            deps_dq = self.strainTensorDerivative(gaussL[p], etaHc, 0, q)
-            # integration weights get applied to stress tensor in the following
-            Tc = self.parentBody.material.stressTensor(
-                self.strainTensor(gaussL[p], etaHc, 0, q),split=True)[1] * detJ0 * wL[p]
+                    # TODO create one ip_v for each section
+                    # BASE SECTION
+                    ip_v[1] = gaussH[b] * 2*HB/H + etaHb
+                    W = WB
+                    Qe += self.forceAtIntegrationPoint(
+                        ip_v,
+                        w_v,q,0) * W * (H-HB) / 4
+                    
+                    # BASE SECTION
+                    ip_v[1] = gaussH[b] * 2*HW/H + etaHw
+                    W = WW
+                    Qe += self.forceAtIntegrationPoint(
+                        ip_v,
+                        w_v,q,0) * W * HW / 4
+                    
+                    # BASE SECTION
+                    ip_v[1] = gaussH[b] * 2 * HH/H + etaHh
+                    W = WH
+                    Qe += self.forceAtIntegrationPoint(
+                        ip_v,
+                        w_v,q,0) * W * HH / 4
+                    
+                    
+                    
+                    
+                    
+                # end of width integration
+            # end of height integration
+            ip_v[0] = gaussL[p]
+            ip_v[1] = etaHc
+            ip_v[2] = 0.0
             
-            Qe += np.einsum('ij...,ij',deps_dq,Tc) * W
+            w_v[0] = wL[p]
+            w_v[1] = 1.0
+            w_v[2] = 1.0
+            
+            Qe += self.forceAtIntegrationPoint(
+                ip_v,
+                w_v,q,1) * 8652e-6
 
         # end of integration
             
-        Qe *= L * H / 4
+        Qe *= L / 2
         
         self.nodalElasticForces = Qe
 
         return Qe
+    
+    def forceAtIntegrationPoint(self, double[:] intPoint, 
+                                double[:] weights, double [:] q, 
+                                int shear=0):
+        '''
+        Computes nodal internal forces for a specific point in
+        element coordinates. The force must be scaled using the 
+        appropriate lenghts.
+
+        Parameters
+        ----------
+        double[ : ] intPoint
+            Integration point with up to three coordinates.
+        double[ : ] weights
+            Integration weights corresponding to each integration point coordinate.
+        double [ : ] q
+            Current nodal positions.
+        int shear : TYPE, optional
+            Selects between bending and shear integration. The default is 0.
+
+        Returns
+        -------
+        np.array Qe
+            Vector of (partial) nodal forces.
+
+        '''
+        cdef double[:,:] T, Tc
+        cdef double[:,:,:] deps_dq
+        cdef double detJ0
+        
+        detJ0 = self.loadInitialJacobian(intPoint[0],intPoint[1],intPoint[2])[1]
+        deps_dq = self.strainTensorDerivative(intPoint[0],intPoint[1],intPoint[2],q)
+        T = self.parentBody.material.stressTensor(
+            self.strainTensor(intPoint[0],intPoint[1],intPoint[2],q),
+            split=True)[shear] * detJ0 * weights[0] * weights[1] * weights[2]
+        
+        return np.einsum('ij...,ij',deps_dq,T)
 
   
     def shapeFunctionMatrix(self, double xi_, double eta_, double zeta_):

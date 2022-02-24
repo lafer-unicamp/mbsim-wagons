@@ -44,6 +44,7 @@ for j in range(nel):
                                   0.032165))
 
 body.addElement(eq)
+Q = body.assembleElasticForceVector()
 
 
 ''' ASSEMBLE SYSTEM '''
