@@ -42,12 +42,12 @@ Wheelset::Wheelset(const std::string& name,
 
 
 	//3D visualization
-	std::shared_ptr<OpenMBV::IvBody> cad=OpenMBV::ObjectFactory::create<OpenMBV::IvBody>();
-	cad->setIvFileName("wrl/wheelset.wrl");
-	cad->setScaleFactor(1.0);
-	cad->setInitialRotation(3*M_PI/2,0,M_PI/2);
-	cad->setInitialTranslation(0,0.0,0);
-	this->setOpenMBVRigidBody(cad);
+//	std::shared_ptr<OpenMBV::IvBody> cad=OpenMBV::ObjectFactory::create<OpenMBV::IvBody>();
+//	cad->setIvFileName("wrl/wheelset.wrl");
+//	cad->setScaleFactor(1.0);
+//	cad->setInitialRotation(3*M_PI/2,0,M_PI/2);
+//	cad->setInitialTranslation(0,0.0,0);
+//	this->setOpenMBVRigidBody(cad);
 
 
 	wheelRight = new MBSim::WheelProfile("Roda direita","roda.dat",getFrame("WR"));

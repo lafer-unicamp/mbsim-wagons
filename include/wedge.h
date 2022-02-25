@@ -29,6 +29,8 @@
 #include "mbsim/contours/contour.h"
 #include "mbsim/contours/point.h"
 #include "mbsim/contours/compound_contour.h"
+#include "mbsim/utils/rotarymatrices.h"
+#include "mbsim/functions/kinematics/kinematics.h"
 #include "fmatvec/vector.h"
 #include "fmatvec/matrix.h"
 #include <math.h>
@@ -43,22 +45,22 @@ public:
   /// \brief default class contructor
   /// \param name Name of the wedge object
   Wedge(const std::string& name);
-  
+
   /// Setters | Getters
-  
+
   void setHeight(double h_);
   void setDepth(double d_);
   void setAngles(fmatvec::Vec angs_); /// \param angs_ vector with two elements for angles 1 and 2
-  
+
   double getHeight(void){return height;};
-  
+
   fmatvec::Mat* getPointTable(void) { return pointTable; }
   fmatvec::Vec* getGrefFramePosition(void) { return gRefFramePosition; };
-  
+
   /// Uses geometric information to form the compound contour
   /// Fills point table matrix and the compound contour
   void buildContour(void);
-  
+
   /// \param enable Boolean to activate OpenMBV
   void enableOpenMBV(bool enable);
 

@@ -19,8 +19,10 @@ class LinearElasticFunctionWithClearances: public MBSim::LinearElasticFunction {
 public:
 	LinearElasticFunctionWithClearances();
 
-	void setClearances(fmatvec::VecV _clear){ this->clearances = _clear;}
+	void setClearances(fmatvec::VecV _clear){ this->clearances <<= _clear;}
+
 	virtual fmatvec::VecV operator() (const fmatvec::VecV& q, const fmatvec::VecV& u) {return K * (q - clearances) + D * u;};
+
 
 protected:
 	fmatvec::VecV clearances;

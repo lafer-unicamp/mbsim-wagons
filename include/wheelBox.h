@@ -20,11 +20,11 @@ using namespace fmatvec;
 class WheelBox: public ElasticJoint {
 public:
 	WheelBox(const std::string &name, Frame* sideFrameFrame, Frame* wheelSetFrame, SymMat stiffnessMatrix);
-	void setStiffnessMatrix(SymMat _stiffness);
+	void setStiffnessMatrix(SymMatV _stiffness);
 
 private:
 	LinearElasticFunction* stiffnessFunction;
-	SymMat myStiffnessMatrix;
+	SymMatV myStiffnessMatrix;
 };
 
 #endif /* WHEELBOX_H_ */

@@ -18,14 +18,16 @@ WheelBox::WheelBox(const std::string &name, Frame* sideFrameFrame,
 	this->setGeneralizedForceFunction(stiffnessFunction);
 	this->setForceDirection("[1,0,0;0,1,0;0,0,1]");
 	this->setMomentDirection("[1,0,0;0,1,0;0,0,1]");
+
+	this->setPlotFeature(force,true);
+	this->setPlotFeature(MBSim::moment,true);
 }
 
-void WheelBox::setStiffnessMatrix(SymMat _stiffness){
+void WheelBox::setStiffnessMatrix(SymMatV _stiffness){
 
-	this->myStiffnessMatrix = _stiffness;
+	this->myStiffnessMatrix <<= _stiffness;
 
 	this->stiffnessFunction->setStiffnessMatrix(this->myStiffnessMatrix);
 	this->stiffnessFunction->setDampingMatrix(this->myStiffnessMatrix * 0.2);
 
 }
-

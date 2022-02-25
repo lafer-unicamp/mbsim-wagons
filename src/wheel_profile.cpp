@@ -25,27 +25,29 @@
 
 namespace MBSim {
 
-void WheelProfile::init(InitStage stage) {
+	MBSIM_OBJECTFACTORY_REGISTERCLASS(MBSIM, WheelProfile)
+
+void WheelProfile::init(InitStage stage, const InitConfigSet &config) {
 	if(stage==preInit) {
 		//sign = solid?1:-1;
 		readInputFile();
 	}
 	else if(stage==plotting) {
-		if(plotFeature[openMBV]==enabled && openMBVRigidBody) {
+		if(plotFeature[openMBV] && openMBVRigidBody) {
 
 		}
 	}
-	ProfileContour::init(stage);
+	ProfileContour::init(stage, config);
 }
 
 void OpenMBVRotation::initializeUsingXML(xercesc::DOMElement *e) {
-	OpenMBVDynamicColoredBody::initializeUsingXML(e);
+	OpenMBVColoredBody::initializeUsingXML(e);
 	// TODO finish implementation
 }
 
 void OpenMBVRotation::initializeObject(
 		const std::shared_ptr<OpenMBV::Rotation>& object) {
-	OpenMBVDynamicColoredBody::initializeObject(object);
+	OpenMBVColoredBody::initializeObject(object);
 	std::cout << points2d << std::endl;
 	configurePoints(points2d);
 	object->setContour(points);

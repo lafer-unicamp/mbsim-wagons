@@ -1,50 +1,78 @@
-# Name of the executable
-Target = src/main
-exec_name = bin/test
+PACKAGES=mbsim
 
-# MBSim installation directory
-mbsimdir = /usr/local/mbsim-env/
+SRCDIR:=$(dir $(lastword $(MAKEFILE_LIST)))
 
-# Defining sources
-SRCEXT = cpp
-sources = $(shell find $(SRCDIR) -name "*."$(SRCEXT))
 
-# Custom includes
-incl = -I include
+# This file builds a "EXECNAME" executable from all sources found under $(SRCDIR).
+# SRCDIR must be set .
+# PACKAGES must also be set .
+# Moreover the LDFLAGS, CPPFLAGS and CXXFLAGS are honored if set externally.
 
-# Directory paths
-BINDIR = bin
-BUILDDIR = build
-SRCDIR = src
+BUILDDIR = $(SRCDIR)build
+EXECNAME = $(BUILDDIR)/teste
 
-# Do not edit the following lines
-CXX = g++-4.8
-libsources = 
-objects = $(patsubst $(SRCDIR)/%,$(BUILDDIR)/%,$(sources:.$(SRCEXT)=.o))
-CPPFLAGS= -m64 -g3 -std=c++11 -Wall -Wfatal-errors -Werror -Wno-unknown-pragmas -fopenmp \
-`pkg-config --cflags mbsim`
-#CPPFLAGS= -g3 -m64 -std=c++11 -Wall -D_GLIBCXX_USE_CXX11_ABI=0 -Wfatal-errors -Werror -Wno-unknown-pragmas -fopenmp \
-`pkg-config --cflags mbsim`
-#`$(mbsimdir)/bin/mbsim-config --cflags`
-	#CPPFLAGS= -m32 -g3 -Wall -U_GLIBCXX_USE_CXX11_ABI -Wabi-tag -Werror -Wno-unknown-pragmas `pkg-config --cflags mbsim`
-$(Target) : $(objects)
-	@echo " Linking..."
-	$(CXX) $^  --trace -o $(exec_name) `pkg-config --libs mbsim` -lpthread -lm -Wl,-rpath,$(mbsimdir)lib
+# Enable VPATH builds with sources at SRCDIR
+VPATH=$(SRCDIR)
 
-# Build objects
-$(BUILDDIR)/%.o: $(SRCDIR)/%.$(SRCEXT)
-	@echo " Building..."
-	@mkdir -p $(BUILDDIR)
-	$(CXX) $(CPPFLAGS) $(incl) -c -o $@ $<
-	
-%.d: %.cc
-	set -e; $(CXX) -MM $(CPPFLAGS) $< \
-	  | sed 's/\(.*\)\.o[ :]*/\1.o \1.d : \g' > $@; \
-	  [ -s $@ ] || rm -f $@
-	
-include $(sources:.cpp:.d)
-	
-.PHONY : clean
-clean :
-	@echo " Cleaning..."
-	$(RM) -r $(BUILDDIR) $(exec_name)
+# use a sources all *.cc file under SRCDIR
+SOURCES:=$(shell (cd $(SRCDIR)src; find -name "*.cpp"))
+# object and dependency files (derived from SOURCES)
+# OBJECTS=$(SOURCES:.cpp=.o)
+OBJECTS=$(addprefix $(BUILDDIR)/,$(SOURCES:.cpp=.o))
+# OBJECTS=$(addprefix $(BUILDDIR),$(notdir $(SOURCES:.cpp=.o)))
+DEPFILES=$(addprefix $(BUILDDIR)/,$(SOURCES:.cpp=.o.d))
+
+# enable C++17
+CXXFLAGS += -ggdb -std=c++17 -D_USE_MATH_DEFINES -I$(SRCDIR)include
+
+# platform specific settings
+ifeq ($(PLATFORM),Windows)
+  SHEXT=.dll
+  EXEEXT=.exe
+  PIC=
+  LDFLAGSRPATH=
+  WIN=1
+else
+  SHEXT=.so
+  EXEEXT=
+  PIC=-fpic
+  LDFLAGSRPATH=-Wl,--disable-new-dtags
+  WIN=0
+endif
+
+# default target
+all: $(EXECNAME)$(EXEEXT)
+
+# FMI export target
+fmiexport: mbsimfmi_model$(SHEXT)
+
+# mingw -Wl,-Map generates some dependencies named rtr0*.o which needs to be removed
+
+# link main executable with pkg-config options from PACKAGES (runexamples.py executes always ./main)
+$(EXECNAME)$(EXEEXT): $(OBJECTS)
+	$(CXX) -Wl,-Map=$@.linkmap -o $@ $(OBJECTS) $(LDFLAGS) $(shell pkg-config --libs $(PACKAGES))
+	@sed -rne "/^LOAD /s/^LOAD (.*)$$/ \1 \\\/p" $@.linkmap | grep -Ev rtr[0-9]+\.o > $@.d2 || true
+	@test $(WIN) -eq 0 && (echo "$@: \\" > $@.d && cat $@.d2 >> $@.d && rm -f $@.linkmap $@.d2) || (rm -f $@.d2)
+
+# FMI export target
+mbsimfmi_model$(SHEXT): $(OBJECTS)
+	$(CXX) -shared $(LDFLAGSRPATH) -Wl,-rpath,\$$ORIGIN,-Map=$@.linkmap -o $@ $(OBJECTS) $(LDFLAGS) $(shell pkg-config --libs $(PACKAGES))
+	@sed -rne "/^LOAD /s/^LOAD (.*)$$/ \1 \\\/p" $@.linkmap | grep -Ev rtr[0-9]+\.o > $@.d2 || true
+	@test $(WIN) -eq 0 && (echo "$@: \\" > $@.d && cat $@.d2 >> $@.d && rm -f $@.linkmap $@.d2) || (rm -f $@.d2)
+
+rpath: $(OBJECTS)
+	$(CXX) -o $@ $^ $(LDFLAGS) $(shell pkg-config --libs $(PACKAGES))  $(shell pkg-config --libs-only-L $(PACKAGES) | sed 's/-L/-Wl,-rpath,/g')
+
+# compile source with pkg-config options from PACKAGES (and generate dependency file)
+$(OBJECTS): $(BUILDDIR)%.o: src%.cpp | build
+	@$(CXX) -MM -MP $(PIC) $(CPPFLAGS) $(CXXFLAGS) $(shell pkg-config --cflags $(PACKAGES)) $< > $@.d
+	$(CXX) -c $(PIC) -o $@ $(CPPFLAGS) $(CXXFLAGS) $(shell pkg-config --cflags $(PACKAGES)) $<
+
+# clean target: remove all generated files
+clean:
+	rm -f main$(EXEEXT) mbsimfmi_model$(SHEXT) $(OBJECTS) $(DEPFILES) main$(EXEEXT).d mbsimfmi_model$(SHEXT).d
+
+# include the generated make rules (without print a warning about missing include files (at first run))
+-include $(DEPFILES)
+-include main$(EXEEXT).d
+-include mbsimfmi_model$(SHEXT).d

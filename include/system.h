@@ -63,19 +63,20 @@ using namespace std;
 #include "inputTools.h"
 #include "jointFactory.h"
 #include "rail_profile.h"
+#include "wheel_rail.h"
 /*
  * This object is not included in the mbsim 11.0 official distribution,
  * so it was added individually
  */
-#include <isotropic_rotational_spring_damper.hx>
+// #include <isotropic_rotational_spring_damper.hx>
 
 class System : public MBSim::DynamicSystemSolver
 {
 public:
   System(const std::string &projectName, const std::string &inputFileName);
   /// GETTERS AND SETTERS
-  
-  
+
+
 private:
   // Sinusoidal movement inputs
   SinusoidalMovement *wheel1; // front wheel, front truck
@@ -94,7 +95,7 @@ private:
   fmatvec::SymMat wagonInertiaTensor; // [kg.m^2]
   bool bolsterBushing; // whether the bolster connections are modelled using 3d-stiffness
   double trainSpeed; // train initial speed in km/h
-  
+
   /// \brief Get input data from text file
   /// \param inputFileName string containing the name of the input file
   /// \return 0 if everything is fine

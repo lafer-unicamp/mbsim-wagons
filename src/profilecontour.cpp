@@ -25,13 +25,12 @@
 
 namespace MBSim {
 
-
 void ProfileContour::readInputFile() {
 
-	std::ifstream dataPointsFile(file);
+	std::ifstream dataPointsFile(this->file);
 
 	// counts the number of lines on the file
-	this->numberOfPoints = 0;
+	numberOfPoints = 0;
 	std::string unused;
 	while ( std::getline(dataPointsFile, unused) )
 		++numberOfPoints;
@@ -67,6 +66,8 @@ void ProfileContour::readInputFile() {
 	}
 
 	dataPointsFile.close();
+
+	//if ( numberOfPoints > 0 ) this->setConvexIndexes();
 }
 
 void ProfileContour::setFile(std::string& filePath_) {
@@ -74,19 +75,66 @@ void ProfileContour::setFile(std::string& filePath_) {
 	readInputFile();
 }
 
-void ProfileContour::init(InitStage stage) {
+void ProfileContour::init(InitStage stage, const InitConfigSet &config) {
 	if(stage==preInit) {
 		//sign = solid?1:-1;
 		readInputFile();
 	}
 	else if(stage==plotting) {
-		if(plotFeature[openMBV]==enabled && openMBVRigidBody) {
+		if(plotFeature[openMBV] && openMBVRigidBody) {
 
 		}
 	}
-	RigidContour::init(stage);
+	RigidContour::init(stage, config);
+}
+
+
+/**
+ * \brief separates the contours into convex sets by listing the first and last indexes
+ * of the convex set points. This routine is called once when the profile is set, for it
+ * is supposed constant. TODO: continuously deformable wheels would require this to be updated
+ * on the fly
+ */
+void ProfileContour::setConvexIndexes() {
+
+	unsigned int k = 0;
+	unsigned int nw = getNumberOfPoints();
+
+	this->convexSetIndexes.resize(nw,2);
+
+	this->convexSetIndexes(0,0) = 0;
+	this->convexSetIndexes(0,1) = 0;
+
+	fmatvec::RowVec2 v1, v2;
+
+	for (unsigned int i = 0;i < (nw-2); i++){
+		v1 = points.row(i+1) - points.row(i);
+		v2 = points.row(i+2) - points.row(i+1);
+		v2 = (cw) ? -v2 : v2;
+		if (v1(0)*v2(1) - v1(1)*v2(0) > -1e-8)
+		{
+			this->convexSetIndexes(k,1) = i+2;
+		}
+		else
+		{
+			k = k+1;
+			this->convexSetIndexes(k,0) = this->convexSetIndexes(k-1,1);
+			this->convexSetIndexes(k,1) = this->convexSetIndexes(k-1,1) + 1;
+		}
+	}
+
+	// TODO redimensionar matriz sem apagar os elementos
+	fmatvec::MatVx2 temp;
+	temp.resize(k+1,2);
+	for (unsigned int i = 0;i<=k;i++){
+		temp(i,0) = convexSetIndexes(i,0);
+		temp(i,1) = convexSetIndexes(i,1);
+	}
+
+
+	this->convexSetIndexes.resize(k,2);
+	convexSetIndexes <<= temp;
+
 }
 
 } /* namespace MBSim */
-
-

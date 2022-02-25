@@ -1,0 +1,58 @@
+# Name of the executable
+Target = src/main
+exec_name = bin/test
+
+# MBSim installation directory
+mbsimdir = /usr/local
+
+# Defining sources
+SRCEXT = cpp
+sources = $(shell find $(SRCDIR) -name "*."$(SRCEXT))
+
+# Custom includes
+incl = -I include -I/usr/include/hdf5/serial
+
+# Directory paths
+BINDIR = bin
+BUILDDIR = build
+SRCDIR = src
+
+# Do not edit the following lines
+CXX = g++
+libsources = -L/usr/local/lib -L/usr/lib/x86_64-linux-gnu/hdf5/serial -L/home/leonardo/Software/casadi3-5-1
+objects = $(patsubst $(SRCDIR)/%,$(BUILDDIR)/%,$(sources:.$(SRCEXT)=.o))
+CPPFLAGS= -m64 -g3 -std=c++17 -Wall -D_GLIBCXX_USE_CXX11_ABI=0 -Wfatal-errors -Werror -Wno-unknown-pragmas -fopenmp \
+`pkg-config --cflags mbsim`
+
+#CPPFLAGS= -g3 -m64 -std=c++11 -Wall -D_GLIBCXX_USE_CXX11_ABI=0 -Wfatal-errors -Werror -Wno-unknown-pragmas -fopenmp \
+`pkg-config --cflags mbsim`
+#`$(mbsimdir)/bin/mbsim-config --cflags`
+	#CPPFLAGS= -m32 -g3 -Wall -U_GLIBCXX_USE_CXX11_ABI -Wabi-tag -Werror -Wno-unknown-pragmas `pkg-config --cflags mbsim`
+$(Target) : $(objects)
+	@echo " Linking..."
+#	$(CXX) $^  --trace -Wl,-rpath,$(mbsimdir)/lib \
+	 $(libsources) \
+	 -lmbsim -lboost_system -lcasadi -lopenmbvcppinterface -lhdf5serie -lhdf5 \
+	 -lrt -lm -lz -lboost_system -lboost_filesystem -lmbxmlutilshelper \
+	 -lboost_regex -lboost_filesystem -lboost_system -lfmatvec \
+	 -llapack -lblas -lpthread -lgfortran -lm -lquadmath -lxerces-c-3.2 -lpthread -lm -o $(exec_name)
+
+	$(CXX) $^ --trace `pkg-config --libs mbsim` -o $(exec_name)
+
+# Build objects
+$(BUILDDIR)/%.o: $(SRCDIR)/%.$(SRCEXT)
+	@echo " Building..."
+	@mkdir -p $(BUILDDIR)
+	$(CXX) $(CPPFLAGS) $(incl) -c -o $@ $<
+
+%.d: %.cc
+	set -e; $(CXX) -MM $(CPPFLAGS) $< \
+	  | sed 's/\(.*\)\.o[ :]*/\1.o \1.d : \g' > $@; \
+	  [ -s $@ ] || rm -f $@
+
+include $(sources:.cpp:.d)
+
+.PHONY : clean
+clean :
+	@echo " Cleaning..."
+	$(RM) -r $(BUILDDIR) $(exec_name)

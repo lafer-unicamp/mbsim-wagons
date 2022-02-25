@@ -9,9 +9,10 @@
 #define WHEELSET_H_
 
 #include <string>
-#include <mbsim/objects/rigid_body.h>
+#include "mbsim/objects/rigid_body.h"
 #include "mbsim/frames/fixed_relative_frame.h"
 #include "openmbvcppinterface/rotation.h"
+#include "openmbvcppinterface/frustum.h"
 #include "openmbvcppinterface/compoundrigidbody.h"
 #include "openmbvcppinterface/ivbody.h"
 #include "wheel_profile.h"
@@ -29,6 +30,12 @@ public:
 	 * This class performs a rotation around the Y axis
 	 */
 	void enableOpenMBV();
+
+	/*
+	 * GETTERS AND SETTERS
+	 */
+	MBSim::WheelProfile* getLeftWheel() { return wheelLeft; };
+	MBSim::WheelProfile* getRightWheel() { return wheelRight; };
 
 protected:
 	double track;

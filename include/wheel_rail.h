@@ -27,6 +27,8 @@
 #include "wheel_profile.h"
 #include "rail_profile.h"
 
+using namespace fmatvec;
+
 namespace MBSim {
 
   class WheelProfile;
@@ -56,6 +58,8 @@ namespace MBSim {
       virtual void updatewb(fmatvec::Vec &wb, double g, std::vector<ContourFrame*> &cFrame);
       /***************************************************/
 
+      void findContactPoints(MatVx2 wheelProfilePoints, MatVx2 railProfilePoints);
+
     private:
       /**
        * \brief contour index
@@ -63,10 +67,27 @@ namespace MBSim {
       int iwheel, irail;
 
       /**
-       * \brief contour classes
+       * \brief contour class
        */
       WheelProfile *wheel;
       RailProfile *rail;
+
+      /**
+       * \brief Implementation of the Minkowski sum
+       */
+      fmatvec::MatVx2 minkowskiSum(fmatvec::MatVx2 A, fmatvec::MatVx2 B, MatVx2I& idxmap);
+
+      /**
+       * \brief Implementation of GJK distance algorithm according to
+       * G. V. den Bergen, “A Fast and Robust GJK Implementation for Collision Detection
+       * of Convex Objects”, Journal of Graphics Tools, vol. 4, nº 2, p. 7–25, jan. 1999.
+       */
+      double gjkDistance(fmatvec::MatVx2 A,
+    		  fmatvec::MatVx2 B,
+			  double maxPenetration,
+			  bool verbose);
+
+      void polytopeMap(VecV vector, MatVx2 polyhedron, VecV& sa, unsigned int& index);
 
   };
 

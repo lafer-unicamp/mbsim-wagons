@@ -1,7 +1,7 @@
 %======================== OVERALL CONTROLS ===================================%
-SIMULATION_TIME=0.05
-TIME_STEP=1e-4
-OUTPUT_FREQHZ=250
+SIMULATION_TIME=.5
+TIME_STEP=1e-5
+OUTPUT_FREQHZ=500
 SYSTEM_NAME=teste_perfil
 %======================== MOTION INPUT =======================================%
 AMPLITUDE=0.030
@@ -16,8 +16,8 @@ BOX_MASS=138547.5
 BOX_Iroll=179997.0
 BOX_Ipitch=942567.5
 BOX_Iyaw=989226.0
-FILL_RATIO=1.0
+FILL_RATIO=0.5
 WAGON_TYPE=0
 %===================== OTHER CONTROLS ========================================%
-FRICTION_COEFF=0.2
+FRICTION_COEFF=0.15
 BOLSTER_BUSHINGS=1

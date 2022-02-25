@@ -25,17 +25,19 @@
 
 namespace MBSim {
 
-void RailProfile::init(InitStage stage) {
+	MBSIM_OBJECTFACTORY_REGISTERCLASS(MBSIM, RailProfile)
+
+void RailProfile::init(InitStage stage, const InitConfigSet &config) {
 	if(stage==preInit) {
 		//sign = solid?1:-1;
 		readInputFile();
 	}
 	else if(stage==plotting) {
-		if(plotFeature[openMBV]==enabled && openMBVRigidBody) {
+		if(plotFeature[openMBV] && openMBVRigidBody) {
 
 		}
 	}
-	ProfileContour::init(stage);
+	ProfileContour::init(stage, config);
 }
 
 std::shared_ptr<std::vector<std::shared_ptr<OpenMBV::PolygonPoint> > > RailProfile::configurePoints() {

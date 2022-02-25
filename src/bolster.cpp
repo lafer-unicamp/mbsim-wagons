@@ -23,7 +23,7 @@
 using namespace std;
 
 Bolster::Bolster(const std::string& name) : RigidBody(name), angle1Radians(0.0), height(1.0), width(1.0), length(1.0)
-{ 
+{
 	// Geometry reference frame initialization
 	geometryReferenceFrame = new FixedRelativeFrame("GR",fmatvec::Vec("[0;0;0]"),
 			fmatvec::SqrMat(3,fmatvec::EYE));
@@ -38,6 +38,9 @@ Bolster::Bolster(const std::string& name) : RigidBody(name), angle1Radians(0.0),
 			fmatvec::SqrMat(3,fmatvec::EYE),
 			this->getFrame("GR"));
 	this->addFrame(wagonConnectionFrame);
+
+	this->getFrame("C")->setPlotFeature(position,true);
+	this->getFrame("C")->setPlotFeature(angle,true);
 
 	// Initialize contact planes
 	leftWedgePlane = new MBSim::Plate("Contact plane left");
@@ -190,5 +193,3 @@ void Bolster::enableOpenMBV(bool enable)
 }
 
 // TODO add to both sides
-
-

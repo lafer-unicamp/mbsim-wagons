@@ -18,7 +18,7 @@
  */
 
 
-#include <barbertruck.h>
+#include "barbertruck.h"
 
 BarberTruck::BarberTruck( const std::string& projectName ): Truck(projectName) {
 	BarberTruck (projectName,false, 2.0);
@@ -75,7 +75,7 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings, do
 	double coefRestitution = 0.00;  // TODO modify this parameter to be setted externally
 
 	//acceleration of gravity
-	MBSimEnvironment::getInstance()->setAccelerationOfGravity ( Vec ( "[0.;-9.810;0]" ) );
+	//MBSimEnvironment::getInstance()->setAccelerationOfGravity ( Vec ( "[0.;-9.810;0]" ) );
 
 	/// ---------------------------- DEFINITION OF BODIES -----------------------
 	/// -------------------------------------------------------------------------
@@ -163,10 +163,6 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings, do
 	wedge2->setFrameOfReference ( bolster->getFrame ( "W2" ) );
 	wedge2->setFrameForKinematics ( wedge2->getFrame ( "C" ) );
 	wedge2->getFrame ( "C" )->enableOpenMBV();
-	translationDirection(0) = -sin(wedgeAngles(0));
-	translationDirection(1) = cos(wedgeAngles(0));
-	wedge2->setTranslation ( new LinearTranslation<VecV> ( translationDirection  ) );
-	//	wedge2->setRotation ( new RotationAboutZAxis<VecV>() );
 	wedge2->enableOpenMBV ( true );
 
 	// Wedge 4
@@ -179,8 +175,6 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings, do
 	wedge4->setFrameOfReference ( bolster->getFrame ( "W4" ) );
 	wedge4->setFrameForKinematics ( wedge4->getFrame ( "C" ) );
 	wedge4->getFrame ( "C" )->enableOpenMBV();
-	wedge4->setTranslation ( new LinearTranslation<VecV> ( translationDirection  ) );
-	//	wedge4->setRotation ( new RotationAboutZAxis<VecV>() );;
 	wedge4->enableOpenMBV ( true );
 
 	// Wedge 1
@@ -195,10 +189,6 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings, do
 	wedge1->setFrameOfReference ( bolster->getFrame ( "W1" ) );
 	wedge1->setFrameForKinematics ( wedge1->getFrame ( "C" ) );
 	wedge1->getFrame ( "C" )->enableOpenMBV();
-	translationDirection(0) = sin(wedgeAngles(1));
-	translationDirection(1) = cos(wedgeAngles(1));
-	wedge1->setTranslation ( new LinearTranslation<VecV> ( translationDirection  ) );
-//	wedge1->setRotation ( new RotationAboutZAxis<VecV>() );
 	wedge1->enableOpenMBV ( true );
 
 	// Wedge 3
@@ -211,8 +201,6 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings, do
 	wedge3->setFrameOfReference ( bolster->getFrame ( "W3" ) );
 	wedge3->setFrameForKinematics ( wedge3->getFrame ( "C" ) );
 	wedge3->getFrame ( "C" )->enableOpenMBV();
-	wedge3->setTranslation ( new LinearTranslation<VecV> ( translationDirection  ) );
-	//	wedge3->setRotation ( new RotationAboutZAxis<VecV>() );
 	wedge3->enableOpenMBV ( true );
 
 
@@ -292,7 +280,7 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings, do
 	/// ---------------- DEFINITION OF JOINTS -----------------------------------
 	///
 	///
-	SymMat wheelBoxStiffMatrix(6,INIT,0.0);
+	SymMatV wheelBoxStiffMatrix(6,INIT,0.0);
 	wheelBoxStiffMatrix(0,0) = 13134500; // longitudinal
 	wheelBoxStiffMatrix(2,2) = 8756300; // lateral
 	wheelBoxStiffMatrix(1,1) = 175127000; // vertical
@@ -338,16 +326,16 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings, do
 
 	std::string wedgeSpringNameRoot("Wedge_spring_");
 
-	sideFrameLeft->addFrame(new FixedRelativeFrame(wedgeSpringNameRoot + toStr(1),
+	sideFrameLeft->addFrame(new FixedRelativeFrame(wedgeSpringNameRoot + to_string(1),
 			relativePosition,SqrMat(3,EYE)));
 	relativePosition(0) = - relativePosition(0);
-	sideFrameLeft->addFrame(new FixedRelativeFrame(wedgeSpringNameRoot + toStr(2),
+	sideFrameLeft->addFrame(new FixedRelativeFrame(wedgeSpringNameRoot + to_string(2),
 			relativePosition,SqrMat(3,EYE)));
 	relativePosition(2) = 0;
-	sideFrameLeft->addFrame(new FixedRelativeFrame(wedgeSpringNameRoot + toStr(4),
+	sideFrameLeft->addFrame(new FixedRelativeFrame(wedgeSpringNameRoot + to_string(4),
 			relativePosition,SqrMat(3,EYE)));
 	relativePosition(0) = - relativePosition(0);
-	sideFrameLeft->addFrame(new FixedRelativeFrame(wedgeSpringNameRoot + toStr(3),
+	sideFrameLeft->addFrame(new FixedRelativeFrame(wedgeSpringNameRoot + to_string(3),
 			relativePosition,SqrMat(3,EYE)));
 
 	relativePosition = 0. * relativePosition;
@@ -370,7 +358,7 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings, do
 	LinearElasticFunctionWithClearances *wedgeSpringLaw = new LinearElasticFunctionWithClearances();
 	wedgeSpringLaw->setStiffnessMatrix(wedgeSpringStiffness);
 	wedgeSpringLaw->setDampingMatrix(wedgeSpringStiffness * bolsterSpringDampingFactor);
-	Vec3 wedgeSpringClearances(3,INIT,0);
+	VecV wedgeSpringClearances(3,INIT,0);
 	wedgeSpringClearances(1) = wedgeSpringFreeLength;
 	wedgeSpringLaw->setClearances(wedgeSpringClearances);
 
@@ -380,9 +368,9 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings, do
 
 	// Spring group connecting right wedge to sideframe
 	for (unsigned int i = 1; i <= 4; i++){
-		ElasticJoint *springWedge = new ElasticJoint ( "Spring-Wedge-" + toStr(i) );
-		springWedge->connect ( sideFrameLeft->getFrame ( wedgeSpringNameRoot + toStr(i) ),
-				dynamic_cast<RigidBody*>(getObject("Wedge " + toStr(i)))->getFrame ( wedgeSpringNameRoot) );
+		ElasticJoint *springWedge = new ElasticJoint ( "Spring-Wedge-" + to_string(i) );
+		springWedge->connect ( sideFrameLeft->getFrame ( wedgeSpringNameRoot + to_string(i) ),
+				dynamic_cast<RigidBody*>(getObject("Wedge " + to_string(i)))->getFrame ( wedgeSpringNameRoot) );
 		springWedge->setForceDirection("[1,0,0;0,1,0;0,0,1]");
 		springWedge->setGeneralizedForceFunction(wedgeSpringLaw);
 		this->addLink ( springWedge );
@@ -416,8 +404,8 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings, do
 				// therefore, springs on position 02 and 12 don't exist
 				if ( j == 0 || j == 1) this->addLink(springBolster);
 				else if ( i == 2) this->addLink(springBolster);
-				springBolster->setPlotFeature("generalizedForce", enabled);
-				springBolster->setPlotFeature("deflection",enabled);
+				springBolster->setPlotFeature(generalizedForce, true);
+				springBolster->setPlotFeature(deflection,true);
 
 				// IF ELASTIC CONNECTIONS
 
@@ -462,16 +450,17 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings, do
 					if (k == 0 ) phi = 0;
 					if (k == 1 ) phi = M_PI;
 					SqrMat3 rotateY = BasicRotAIKy(phi);
-					SymMat randomRotationMatrix (6,EYE);
+					SqrMat randomRotationMatrix (6,EYE);
 					for (unsigned ri=0;ri<=2;ri++){
-						for (unsigned rj=0;rj<=i;rj++){
+						for (unsigned rj=0;rj<=2;rj++){
 							randomRotationMatrix(ri,rj) = rotateY(ri,rj);
 							randomRotationMatrix(ri+3,rj+3) = rotateY(ri,rj);
 						}
 					}
 
+
 					SymMat rotatedStiffness(6,INIT,0.0);
-					rotatedStiffness = trans(randomRotationMatrix) * stiffnessMatrix * randomRotationMatrix;
+					rotatedStiffness = fmatvec::JTMJ(stiffnessMatrix,randomRotationMatrix);
 
 					// sets the bushings with the rotated stiffness matrix
 					stiffnessFcn->setStiffnessMatrix(rotatedStiffness);
@@ -486,7 +475,7 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings, do
 					ElasticJoint *bushingBolster =
 							new ElasticJoint (springName.str());
 					bushingBolster->setGeneralizedForceFunction(stiffnessFcn);
-					bushingBolster->setForceDirection("[1,0,0;0,1,0;0,0,1");
+					bushingBolster->setForceDirection("[1,0,0;0,1,0;0,0,1]");
 					bushingBolster->setMomentDirection("[1,0,0;0,1,0;0,0,1]");
 
 
@@ -511,9 +500,9 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings, do
 //							dummyFrame);
 					if ( j == 0 || j == 1) this->addLink(bushingBolster);
 					else if ( i == 2) this->addLink(bushingBolster);
-					bushingBolster->setPlotFeatureRecursive("generalizedForce", enabled);
-					bushingBolster->setPlotFeatureRecursive("generalizedRelativePosition",enabled);
-					bushingBolster->setPlotFeatureRecursive("generalizedRelativeVelocity",enabled);
+					bushingBolster->setPlotFeatureRecursive(generalizedForce, true);
+					bushingBolster->setPlotFeatureRecursive(generalizedRelativePosition,true);
+					bushingBolster->setPlotFeatureRecursive(generalizedRelativeVelocity,true);
 				}
 			}
 		}
@@ -537,6 +526,42 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings, do
 		setWedgeContacts(wedge4->getContour("Left face"),sideFrameLeft->getContour("Side frame left"),
 				frictionCoefficient,coefRestitution);
 	}
+	else{
+		/// If contact is not active, planar joints are set
+		Joint *wedgeJointS = new Joint("Wedge 1 to sideframe");
+		wedgeJointS->connect(wedge1->getFrame("Right face central frame"),sideFrameRight->getFrame("sframe_r_contact_plane"));
+		wedgeJointS->setForceLaw(new MBSim::BilateralConstraint);
+		// wedgeJointS->setMomentLaw(new MBSim::BilateralConstraint);
+		wedgeJointS->setForceDirection("[1;0;0]");
+		// wedgeJointS->setMomentDirection("[0,0;1,0;0,1]");
+		wedgeJointS->setPlotFeature(force,true);
+		wedgeJointS->setPlotFeature(generalizedRelativePosition,true);
+		addLink(wedgeJointS);
+
+		wedgeJointS = new Joint("Wedge 2 to sideframe");
+		wedgeJointS->connect(wedge2->getFrame("Left face central frame"),sideFrameRight->getFrame("sframe_l_contact_plane"));
+		wedgeJointS->setForceLaw(new MBSim::BilateralConstraint);
+		// wedgeJointS->setMomentLaw(new MBSim::BilateralConstraint);
+		wedgeJointS->setForceDirection("[1;0;0]");
+		// wedgeJointS->setMomentDirection("[0,0;1,0;0,1]");
+		addLink(wedgeJointS);
+
+		wedgeJointS = new Joint("Wedge 3 to sideframe");
+		wedgeJointS->connect(wedge3->getFrame("Right face central frame"),sideFrameLeft->getFrame("sframe_r_contact_plane"));
+		wedgeJointS->setForceLaw(new MBSim::BilateralConstraint);
+		// wedgeJointS->setMomentLaw(new MBSim::BilateralConstraint);
+		wedgeJointS->setForceDirection("[1;0;0]");
+		// wedgeJointS->setMomentDirection("[0,0;1,0;0,1]");
+		addLink(wedgeJointS);
+
+		wedgeJointS = new Joint("Wedge 4 to sideframe");
+		wedgeJointS->connect(wedge4->getFrame("Left face central frame"),sideFrameLeft->getFrame("sframe_l_contact_plane"));
+		wedgeJointS->setForceLaw(new MBSim::BilateralConstraint);
+		// wedgeJointS->setMomentLaw(new MBSim::BilateralConstraint);
+		wedgeJointS->setForceDirection("[1;0;0]");
+		// wedgeJointS->setMomentDirection("[0,0;1,0;0,1]");
+		addLink(wedgeJointS);
+	}
 
 	if(contactsBolster){
 		setWedgeContacts(wedge1->getContour("Left face"),bolster->getContour("Contact plane right"),
@@ -547,6 +572,40 @@ BarberTruck::BarberTruck ( const std::string& projectName, bool withBushings, do
 				frictionCoefficient,coefRestitution);
 		setWedgeContacts(wedge4->getContour("Right face"),bolster->getContour("Contact plane left"),
 				frictionCoefficient,coefRestitution);
+	}
+	else {
+		Joint *wedgeJointB = new Joint("Wedge 1 to bolster");
+		wedgeJointB->connect(wedge1->getFrame("Left face central frame"),bolster->getFrame("right_wedge_plane_frame"));
+		wedgeJointB->setForceLaw(new MBSim::BilateralConstraint);
+		wedgeJointB->setMomentLaw(new MBSim::BilateralConstraint);
+		wedgeJointB->setForceDirection("[1;0;0]");
+		wedgeJointB->setMomentDirection("[0;0;1]");
+		wedgeJointB->setPlotFeature(force,true);
+		addLink(wedgeJointB);
+
+		wedgeJointB = new Joint("Wedge 2 to bolster");
+		wedgeJointB->connect(wedge2->getFrame("Right face central frame"),bolster->getFrame("left_wedge_plane_frame"));
+		wedgeJointB->setForceLaw(new MBSim::BilateralConstraint);
+		wedgeJointB->setMomentLaw(new MBSim::BilateralConstraint);
+		wedgeJointB->setForceDirection("[1;0;0]");
+		wedgeJointB->setMomentDirection("[0;0;1]");
+		addLink(wedgeJointB);
+
+		wedgeJointB = new Joint("Wedge 3 to bolster");
+		wedgeJointB->connect(wedge3->getFrame("Left face central frame"),bolster->getFrame("right_wedge_plane_frame"));
+		wedgeJointB->setForceLaw(new MBSim::BilateralConstraint);
+		wedgeJointB->setMomentLaw(new MBSim::BilateralConstraint);
+		wedgeJointB->setForceDirection("[1;0;0]");
+		wedgeJointB->setMomentDirection("[0;0;1]");
+		addLink(wedgeJointB);
+
+		wedgeJointB = new Joint("Wedge 4 to bolster");
+		wedgeJointB->connect(wedge4->getFrame("Right face central frame"),bolster->getFrame("left_wedge_plane_frame"));
+		wedgeJointB->setForceLaw(new MBSim::BilateralConstraint);
+		wedgeJointB->setMomentLaw(new MBSim::BilateralConstraint);
+		wedgeJointB->setForceDirection("[1;0;0]");
+		wedgeJointB->setMomentDirection("[0;0;1]");
+		addLink(wedgeJointB);
 	}
 
 }
@@ -628,11 +687,11 @@ void BarberTruck::setWedgeContacts(Contour *wedgeFace,
 		contact->connect ( dynamic_cast<MBSim::CompoundContour*>(wedgeFace)->getContour(i),
 				otherFace );
 		contact->setNormalForceLaw ( new UnilateralConstraint );
-		contact->setNormalImpactLaw ( new UnilateralNewtonImpact ( 0 ) );
+		contact->setNormalImpactLaw ( new UnilateralNewtonImpact ( coefRestitution ) );
 		contact->setTangentialImpactLaw ( new SpatialCoulombImpact ( frictionCoefficient ) );
 		contact->setTangentialForceLaw ( new SpatialCoulombFriction ( frictionCoefficient ) );
-		contact->setPlotFeature("generalizedForce",enabled);
-		contact->setPlotFeature("generalizedRelativePosition",enabled);
+		contact->setPlotFeature(generalizedForce,true);
+		contact->setPlotFeature(generalizedRelativePosition,true);
 		addLink(contact);
 
 		if (observerActive)
@@ -646,6 +705,3 @@ void BarberTruck::setWedgeContacts(Contour *wedgeFace,
 		}
 	}
 }
-
-
-

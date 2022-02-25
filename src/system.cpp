@@ -105,45 +105,62 @@ System::System(const string& projectName, const string& inputFileName) :
 	/// --------------- PARAMETERS ----------------------------------------------
 
 	// set the acceleration of gravity
-	MBSimEnvironment::getInstance()->setAccelerationOfGravity(Vec("[0;-9.81;0]"));
+	getMBSimEnvironment()->setAccelerationOfGravity(Vec("[0;-9.81;0]"));
 
 	this->getFrame("I")->enableOpenMBV();
 
 	/// ----------------- TRUCKS ------------------------------------------------
-	Vec3 position(3, INIT, 0.0);
-	position(0) = truckBaseDistance / 2;
+	Vec3 posit(3, INIT, 0.0);
+	posit(0) = truckBaseDistance / 2;
 	BarberTruck *frontTruck = new BarberTruck("Front truck", bolsterBushing, truckWheelBase);
-	frontTruck->addFrame(new FixedRelativeFrame("FT_RefFrame",position,
+	frontTruck->addFrame(new FixedRelativeFrame("FT_RefFrame",posit,
 			SqrMat(3,EYE)));
 	frontTruck->setFrameOfReference(frontTruck->getFrame("FT_RefFrame"));
 	this->addGroup(frontTruck);
 
-	position(0) = -truckBaseDistance / 2;
+	posit(0) = -truckBaseDistance / 2;
 	BarberTruck *rearTruck = new BarberTruck("Rear truck", bolsterBushing, truckWheelBase);
-	rearTruck->addFrame(new FixedRelativeFrame("RT_RefFrame",position,
+	rearTruck->addFrame(new FixedRelativeFrame("RT_RefFrame",posit,
 			SqrMat(3,EYE)));
 	rearTruck->setFrameOfReference(rearTruck->getFrame("RT_RefFrame"));
 	this->addGroup(rearTruck);
+
+
 	//
 	//
 
 
 	/// ----------------------------- RAIL ------------------------------------------
 	///
-	RailProfile *rail = new RailProfile("Rail profile","tr68.dat");
-	rail->enableOpenMBV();
-	addContour(rail);
+
+	posit(0) = 0;
+	posit(1) = -0.672;
+	posit(2) = - (0.8 + 0.03681); //0.03681 corrects the gauge distance
+
+	RailProfile *leftRail = new RailProfile("Left rail profile","tr68.dat");
+	addFrame(new FixedRelativeFrame("Left rail frame",posit,"[0,0,1;0,1,0;1,0,0]"));
+	leftRail->setFrameOfReference(getFrame("Left rail frame"));
+	leftRail->enableOpenMBV();
+	addContour(leftRail);
+
+	posit(2) = - posit(2);
+
+	RailProfile *rightRail = new RailProfile("Right rail profile","tr68.dat");
+	addFrame(new FixedRelativeFrame("Right rail frame",posit,"[0,0,-1;0,1,0;-1,0,0]"));
+	rightRail->setFrameOfReference(getFrame("Right rail frame"));
+	rightRail->enableOpenMBV();
+	addContour(rightRail);
 
 	/// --------------------------- WAGONBOX ----------------------------------------
 	///
 	WagonSimple *wagon = new WagonSimple("Wagonbox");
-	wagon->setTotalMass(wagonMass);
+	wagon->setTotalMass(wagonMass*fillRatio);
 	wagon->setInertiaTensor(wagonInertiaTensor);
 
-	position(0) = 0.0;
-	position(1) = 1.3;
-	position(2) = 0.0;
-	wagon->addFrame(new FixedRelativeFrame("WB_RefFrame",position,
+	posit(0) = 0.0;
+	posit(1) = 1.3;
+	posit(2) = 0.0;
+	wagon->addFrame(new FixedRelativeFrame("WB_RefFrame",posit,
 			SqrMat(3,EYE)));
 	wagon->setFrameOfReference(wagon->getFrame("WB_RefFrame"));
 	wagon->setFrontBolsterConnectionPosition(truckBaseDistance/2,-1.10118,0);
@@ -190,32 +207,51 @@ System::System(const string& projectName, const string& inputFileName) :
 	addLink(rearPlate);
 
 
+	/// -------------- WHEEL-RAIL CONTACT --------------------------------------
+
+	Contact* wheelRail = new Contact("Wheel Rail");
+	wheelRail->connect(leftRail,frontTruck->wheelFront->getLeftWheel());
+	wheelRail->setNormalForceLaw(new UnilateralConstraint);
+	wheelRail->setNormalImpactLaw(new UnilateralNewtonImpact(1.));
+	addLink(wheelRail);
+
+//	ContactObserver *observer = new ContactObserver(std::string("Wheel rail contact"));
+//	observer->setContact(wheelRail);
+//	observer->enableOpenMBVContactPoints(_size=0.05);
+//	observer->enableOpenMBVNormalForce(_size=0.05);
+//	observer->enableOpenMBVTangentialForce(_size=0.05);
+//	addObserver(observer);
+	//
+	// wheelRail->setPlotFeature(generalizedForce,true);
+	// wheelRail->setPlotFeature(generalizedRelativePosition,true);
+
 	/// -------------- MOTION DEFINITION ----------------------------------------
 
 	double tSpeedMeterPerSec = trainSpeed / 3.6;
-	double period = 5/tSpeedMeterPerSec;
+	double period = 5./tSpeedMeterPerSec;
 	if (tfinal == 0) period = 1e3;
 	else period = tfinal;
-	// front wheel, front truck = wheel 1
-	frontTruck->wheelFront->setTranslation(new Motion(freq,amplitude,t0,
-			period,2));
-	// rear wheel, front truck = wheel2
-	frontTruck->wheelRear->setTranslation(new Motion(freq,amplitude,
-			t0+truckWheelBase/tSpeedMeterPerSec,
-			period,2));
-	// front wheel, rear truck = wheel3
-	rearTruck->wheelFront->setTranslation(new Motion(freq,amplitude,
-			t0+(truckBaseDistance)/tSpeedMeterPerSec,
-			period,2));
-	// rear wheek, rear truck = wheel4
-	rearTruck->wheelRear->setTranslation(new Motion(freq,amplitude,
-			t0+(truckBaseDistance+truckWheelBase)/tSpeedMeterPerSec,
-			period,2));
 
-	setPlotFeatureRecursive("generalizedPosition",enabled);
-	setPlotFeatureRecursive("position",enabled);
-	setPlotFeatureRecursive("generalizedVelocity",enabled);
-	setPlotFeatureRecursive("generalizedForce",enabled);
+	// front wheel, front truck = wheel 1
+//	frontTruck->wheelFront->setTranslation(new Motion(freq,amplitude,t0,
+//			period,2));
+	// frontTruck->wheelFront->setTranslation(new LinearTranslation<VecV> ("[1,0,0;0,1,0;0,0,1]"));
+	// rear wheel, front truck = wheel2
+	// frontTruck->wheelRear->setTranslation(new Motion(freq,amplitude,
+	// 		t0+truckWheelBase/tSpeedMeterPerSec,
+	// 		period,2));
+	// // front wheel, rear truck = wheel3
+	// rearTruck->wheelFront->setTranslation(new Motion(freq,amplitude,
+	// 		t0+(truckBaseDistance)/tSpeedMeterPerSec,
+	// 		period,2));
+	// // rear wheek, rear truck = wheel4
+	// rearTruck->wheelRear->setTranslation(new Motion(freq,amplitude,
+	// 		t0+(truckBaseDistance+truckWheelBase)/tSpeedMeterPerSec,
+	// 		period,2));
+
+	setPlotFeatureRecursive(generalizedPosition,true);
+	setPlotFeatureRecursive(generalizedVelocity,true);
+	setPlotFeatureRecursive(generalizedForce,true);
 }
 
 int
