@@ -41,10 +41,13 @@ for j in range(nel):
                                   6*0.0254,
                                   0.0805,
                                   0.022147,
-                                  0.032165))
+                                  0.032165,
+                                  135.605e-3,
+                                  23.815e-3,
+                                  78.339e-3,
+                                  8652.e-6))
 
 body.addElement(eq)
-Q = body.assembleElasticForceVector()
 
 
 ''' ASSEMBLE SYSTEM '''
@@ -89,17 +92,18 @@ def viga_biengastada():
         fel += 0.001 * body.assembleElasticForceVector().squeeze()
         
         # effect of moving force
-        pos = 2.*t
-        
-        point = np.array([pos,0.,0.])
+        if t <= 1.:
+            pos = 2.*t
             
-        isit = body.findElement(point)
-        
-        localXi = eq[isit].mapToLocalCoords(point)
-        
-        extForce = np.dot(movForce, eq[isit].shapeFunctionMatrix(localXi[0],localXi[1],localXi[2]))
-        
-        fel[eq[isit].globalDof] += extForce
+            point = np.array([pos,0.,0.])
+                
+            isit = body.findElement(point)
+            
+            localXi = eq[isit].mapToLocalCoords(point)
+            
+            extForce = np.dot(movForce, eq[isit].shapeFunctionMatrix(localXi[0],localXi[1],localXi[2]))
+            
+            fel[eq[isit].globalDof] += extForce
         
         
         
@@ -152,7 +156,7 @@ DAE.num_threads = 12
 DAE.suppress_alg = True
 
 outFreq = 10e3 # Hz
-finalTime = 1.
+finalTime = 1.2
 
 problem.res(0,problem.y0,problem.yd0)
 
@@ -164,7 +168,7 @@ lam = p[:,2*system.n_p:]
 
 # plot positions
 plt.figure()
-for i in np.arange(0, 10001,2000):
+for i in np.arange(0, u.shape[0],2000):
     body.updateDisplacements(q[i])
     a = body.plotPositions()
     plt.plot(a[:,0],a[:,1], label='{:.2f} s'.format(t[i]))

@@ -1037,16 +1037,20 @@ cdef class railANCF3Dquadratic(beamANCF3Dquadratic):
     ''' Properties' declarations'''
     
     cdef double centroidHeightFromBase
-    cdef double baseHeight
-    cdef double headHeight
-    cdef double webHeight
+    cdef double baseHeight, headHeight, webHeight
+    cdef double baseWidth, headWidth, webWidth
+    cdef double crossSecArea
      
     def __init__(self, node1, node2, 
                  double _height, 
                  double _width, 
                  double _hc,
                  double _hb,
-                 double _hh):
+                 double _hh,
+                 double _wb,
+                 double _ww,
+                 double _wh,
+                 double _cSecArea):
         '''
         
 
@@ -1066,6 +1070,14 @@ cdef class railANCF3Dquadratic(beamANCF3Dquadratic):
             Rail base height.
         double _hh : double
             Rail head height.
+        double _wb : double
+            Rail base width
+        double _ww : double
+            Rail web width
+        double _wh : double
+            Rail head width
+        double _cSecArea : double
+            Rail section area (from standards)
 
         Returns
         -------
@@ -1079,8 +1091,12 @@ cdef class railANCF3Dquadratic(beamANCF3Dquadratic):
         self.baseHeight = _hb
         self.headHeight = _hh
         self.webHeight = _height - _hb - _hh
+        self.baseWidth = _wb
+        self.webWidth = _ww
+        self.headWidth = _wh
         # centroid height
         self.centroidHeightFromBase = _hc
+        self.crossSecArea = _cSecArea
         intermediateNode = node()
         intermediateNode.q0 = np.array([(a+b)*0.5 for a,b in zip(node1.q0,node2.q0)])
         self.nodes = [node1,intermediateNode,node2]
@@ -1096,11 +1112,11 @@ cdef class railANCF3Dquadratic(beamANCF3Dquadratic):
         cdef double heiFromFoot = self.height / 2 * (1 + eta_)
          
         if heiFromFoot < self.baseHeight:
-            return 135.605e-3
+            return self.baseWidth
         elif heiFromFoot < (self.baseHeight + self.webHeight):
-            return 23.815e-3
+            return self.webWidth
         else:
-            return 78.339e-3
+            return self.headWidth
         
         
     def getNodalElasticForces(self,double [:] q = None):
@@ -1129,6 +1145,7 @@ cdef class railANCF3Dquadratic(beamANCF3Dquadratic):
         cdef double HB = self.baseHeight
         cdef double HW = self.webHeight
         cdef double HH = self.headHeight
+        cdef double area = self.crossSecArea
         cdef double etaHc = 2 * self.centroidHeightFromBase / H - 1       # centroid height in element specficic coordinates
         cdef double etaHb = 2 * self.baseHeight / H - 1
         cdef double etaHw = 2 * self.baseHeight / H - 4 * self.webHeight - 1
@@ -1179,7 +1196,7 @@ cdef class railANCF3Dquadratic(beamANCF3Dquadratic):
             for c in range(nGaussW):
                 'width quadrature'
                 for b  in range(nGaussH):  
-                    # gets the correct width
+                    'height quadrature'
                     ip_v[0] = gaussL[p]
                     ip_v[2] = gaussW[c]
                     
@@ -1208,11 +1225,7 @@ cdef class railANCF3Dquadratic(beamANCF3Dquadratic):
                     Qe += self.forceAtIntegrationPoint(
                         ip_v,
                         w_v,q,0) * W * HH / 4
-                    
-                    
-                    
-                    
-                    
+                    # end of height integration
                 # end of width integration
             # end of height integration
             ip_v[0] = gaussL[p]
@@ -1225,7 +1238,7 @@ cdef class railANCF3Dquadratic(beamANCF3Dquadratic):
             
             Qe += self.forceAtIntegrationPoint(
                 ip_v,
-                w_v,q,1) * 8652e-6
+                w_v,q,1) * area
 
         # end of integration
             
