@@ -13,6 +13,10 @@ from Cython.Build import cythonize
 setup(
     ext_modules = cythonize(["nachbagauer3Dc.pyx",
                              "flexibleBodyc.pyx",
+                             "materialsc.pyx",
+                             "profilesc.pyx",
+                             "bodiesc.pyx",
+                             "helper_funcs.pyx",
                              "teste_estatico_3D_cython.pyx"],
                             language_level=3,
                             language='c++')

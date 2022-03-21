@@ -1,27 +1,219 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Cython version of flexible body
+Created on Wed Mar 16 14:55:42 2022
 
-Created on Fri Nov 26 07:35:58 2021
+Classes to use with Multibody System as bodies
 
 @author: leonardo
 """
 
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-from warnings import warn
+import MultibodySystem as mbs
 
-########################################
-cdef class flexibleBody(object):
-    warn('This method is deprecated.', DeprecationWarning, stacklevel=2)
+cdef class body(object):
+    
+    cdef str name, type
+    cdef int totalDof
+    cdef double mass
+    cdef double[:,:] massMatrix
+    cdef double[:] q0, u0
+    cdef public list globalDof
+    cdef list markers
+    
+    def __init__(self,name_,numberOfDof=0):
+        self.name = name_
+        self.type = 'Generic body descriptor'
+        self.totalDof = numberOfDof
+        self.q0 = np.zeros(self.totalDof, dtype=np.float64)
+        self.u0 = np.zeros(self.totalDof, dtype=np.float64)
+        self.globalDof = []
+        self.markers = []
+    
+    @property
+    def name(self):
+        return self.name
+    
+    @property
+    def type(self):
+        return self.type
+    
+    @property
+    def markers(self):
+        return self.markers
+    
+    @property 
+    def mass(self):
+        return self.mass
+    
+    @property
+    def totalDof(self):
+        return self.totalDof
+    
+    @property
+    def q0(self):
+        return np.array(self.q0)
+    
+    @property
+    def u0(self):
+        return np.array(self.u0)    
+    
+    
+    
+    
+    
+    ####### METHODS ##################################
+    def addMarker(self, mrk):
+        if type(mrk) is list:
+            print('{}.addMarker error: expected single marker as input, not list')
+        
+        self.markers.append(mrk)
+        mrk.setParentBody(self)
+        
+        return mrk
+    
+    def setPositionInitialConditions(self,*args):
+        '''
+        Set the initial conditions on position level
+        
+        This function has two possible calls
+        
+        setPositionInitialConditions(q) expects q to be an array with all dofs specified
+        
+        setPositionInitialConditions(qInd,val) expects qInd to be the index of the dof and val is the initial value attributed to q[qInd].
+
+        Parameters
+        ----------
+         : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        '''
+        if len(args) == 1:
+            if args[0].size == self.totalDof:
+                # then the input vector has the correct size
+                self.q0 = args[0]
+            else:
+                print('Body {}: error on initial conditions attribution: expected a {}-dimensional vector'.format(self.name,self.totalDof))
+        elif len(args) == 2:
+            self.q0[args[0]] = args[1]
+        else:
+            print('{} setInitialConditions: expected 1 or 2 elements.'.format(self.name))
+    
+    def setVelocityInitialConditions(self,*args):
+        '''
+        Set the initial conditions on position level
+        
+        This function has two possible calls
+        
+        setPositionInitialConditions(q) expects q to be an array with all dofs specified
+        
+        setPositionInitialConditions(qInd,val) expects qInd to be the index of the dof and val is the initial value attributed to q[qInd].
+
+        Parameters
+        ----------
+         : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        '''
+        if len(args) == 1:
+            if args[0].size == self.totalDof:
+                # then the input vector has the correct size
+                self.u0 = args[0]
+            else:
+                print('Body {}: error on initial conditions attribution: expected a {}-dimensional vector'.format(self.name,self.totalDof))
+        elif len(args) == 2:
+            self.u0[args[0]] = args[1]
+        else:
+            print('{} setInitialConditions: expected 1 or 2 elements.'.format(self.name))
+            
+            
+###############################################################################
+############## GROUND #########################################################
+############################################################################### 
+cdef class ground(body): 
+    def __init__(self):        
+        super().__init__('Ground',0)
+        self.type = 'Ground'
+        self.massMatrix = np.array([[]])
+        self.addMarker(mbs.marker('O'))
+    
+    @property
+    def massMatrix(self):
+        return np.array(self.massMatrix)
+
+###############################################################################
+############## RIGID BODIES ###################################################
+###############################################################################  
+cdef class rigidBody(body):  
+    
+    cdef double[:,:] inertiaTensor
+    
+    def __init__(self,name_):        
+        super().__init__(name_,6)
+        self.type = 'Rigid body'
+        
+        self.addMarker(mbs.marker('cog'))
+        self.markers[0].setParentBody(self)
+        
+        self.massMatrix = np.zeros((6,6))
+        
+    def setMass(self,new_mass):
+        cdef Py_ssize_t i
+        self.mass = new_mass
+        for i in range(3):
+            self.massMatrix[i,i] = new_mass
+        
+    @property
+    def massMatrix(self):
+        return np.array(self.massMatrix)
+        
+    @property
+    def inertiaTensor(self):
+        return np.array(self.inertiaTensor)
+        
+        
+    def setInertiaTensor(self, tensor):
+        mMatrix = np.zeros((6,6))
+        if tensor.shape == (3,3):
+            self.inertiaTensor = tensor
+            mMatrix[:3,:3] = np.diag([self.mass]*3)
+            mMatrix[3:,3:] = self.inertiaTensor
+            self.massMatrix = mMatrix
+        else:
+            print('Error in inertia attribution. Need a 3x3 tensor.')
+            
+            
+    def info(self):
+        print('INFO:')
+        print('Printing information on {} ""{}""'.format(self.type,self.name));
+        print('Number of dof: {}'.format(self.totalDof))
+        print('Inertia tensor: \n{}'.format(np.array(self.inertiaTensor)))
+        print('Contains markers:')
+        for m in self.markers:
+            print('\t{} at {}'.format(m.name,m.position))
+        print('-'*80)
+            
+###############################################################################
+############## FLEXIBLE BODIES ################################################
+###############################################################################           
+cdef class flexibleBody(body):
     '''
     Flexible body class
     '''
     
-    
+    cdef int dimensionality
     cdef list elementList
+    cdef object material
+    cdef double[:] nodalElasticForces
     
     def __init__(self,name,material):
         '''
@@ -44,11 +236,7 @@ cdef class flexibleBody(object):
         super().__init__(name)
         self.material = material
         self.elementList = []
-        self.totalDof = 0   # total number of degrees of freedom
-        
-        
-        
-        
+        self.totalDof = 0   # total number of degrees of freedom       
         
     @property 
     def mass(self):
@@ -57,6 +245,10 @@ cdef class flexibleBody(object):
             mass += e.mass
             
         return mass
+    
+    @property
+    def material(self):
+        return self.material
     
     @property
     def q(self):
@@ -255,7 +447,7 @@ com
             the number of the element. -1 if no element found
 
         '''
-        if len(point) != self.dimensionality:
+        if int(len(point)) != self.dimensionality:
             print('Error in findElement: the point has {} coordinates, but the element is {}-dimensional'.format(len(point),self.dimensionality))
         
         cdef Py_ssize_t ele = -1
@@ -270,7 +462,7 @@ com
 
 
 ##############################################################################
-class flexibleBody3D(flexibleBody):
+cdef class flexibleBody3D(flexibleBody):
     '''
     Tri-dimensional flexible body
     '''
@@ -283,7 +475,7 @@ class flexibleBody3D(flexibleBody):
         
         print('Created 3D body \'{}\' with material \'{}\''.format(name,material.name))
 
-class flexibleBody2D(flexibleBody):
+cdef class flexibleBody2D(flexibleBody):
     '''
     Bi-dimensional flexible body
     '''
@@ -295,10 +487,5 @@ class flexibleBody2D(flexibleBody):
         self.dimensionality = np.int8(2)
         
         print('Created 2D body \'{}\' with material \'{}\''.format(name,material.name))
-
-
-
-if __name__ == '__main__':
-    from materials import linearElasticMaterial
-    body = flexibleBody3D('teste', linearElasticMaterial('teste', 1, 1, 1))
-                
+    
+    
