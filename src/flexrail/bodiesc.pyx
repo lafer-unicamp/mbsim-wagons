@@ -11,6 +11,7 @@ Classes to use with Multibody System as bodies
 import numpy as np
 import matplotlib.pyplot as plt
 import MultibodySystem as mbs
+import helper_funcs as hf
 
 cdef class body(object):
     
@@ -19,8 +20,9 @@ cdef class body(object):
     cdef double mass
     cdef double[:,:] massMatrix
     cdef double[:] q0, u0
+    cdef double[:,:] simQ, simU, simF
     cdef public list globalDof
-    cdef list markers
+    cdef list markers, profiles
     
     def __init__(self,name_,numberOfDof=0):
         self.name = name_
@@ -30,6 +32,7 @@ cdef class body(object):
         self.u0 = np.zeros(self.totalDof, dtype=np.float64)
         self.globalDof = []
         self.markers = []
+        self.profiles = []
     
     @property
     def name(self):
@@ -42,6 +45,10 @@ cdef class body(object):
     @property
     def markers(self):
         return self.markers
+    
+    @property
+    def profiles(self):
+        return self.profiles
     
     @property 
     def mass(self):
@@ -59,19 +66,71 @@ cdef class body(object):
     def u0(self):
         return np.array(self.u0)    
     
+    @property
+    def simQ(self):
+        return np.array(self.simQ)
+    @simQ.setter
+    def simQ(self, simArray):
+        self.simQ = simArray
+    
+    @property
+    def simU(self):
+        return np.array(self.simU)
+    @simU.setter
+    def simU(self, simArray):
+        self.simU = simArray
+    
     
     
     
     
     ####### METHODS ##################################
     def addMarker(self, mrk):
+        '''
+        Adds a markr to the body markers list.
+        
+        The added marker parentBody property is automalically set to the body
+        it is added to.
+
+        Parameters
+        ----------
+        mrk : marker
+            The marker to be added.
+
+        Returns
+        -------
+        mrk : marker
+            The marker created .
+
+        '''
         if type(mrk) is list:
             print('{}.addMarker error: expected single marker as input, not list')
         
         self.markers.append(mrk)
-        mrk.setParentBody(self)
+        mrk.setParent(self)
         
         return mrk
+    
+    def addProfile(self, prof):
+        '''
+        Adds a profile to the body
+
+        Parameters
+        ----------
+        prof : profile
+            The profile to be added.
+
+        Returns
+        -------
+        prof : profile
+            The profile that has been added. It is returned to be used in other
+            parts of the code, if needed.
+
+        '''
+        self.profiles.append(prof)
+        prof.setParent(self)
+        
+        return prof
     
     def setPositionInitialConditions(self,*args):
         '''
@@ -145,6 +204,7 @@ cdef class ground(body):
         self.type = 'Ground'
         self.massMatrix = np.array([[]])
         self.addMarker(mbs.marker('O'))
+        self.globalDof = []
     
     @property
     def massMatrix(self):
@@ -162,7 +222,7 @@ cdef class rigidBody(body):
         self.type = 'Rigid body'
         
         self.addMarker(mbs.marker('cog'))
-        self.markers[0].setParentBody(self)
+        self.markers[0].setParent(self)
         
         self.massMatrix = np.zeros((6,6))
         
@@ -190,6 +250,36 @@ cdef class rigidBody(body):
             self.massMatrix = mMatrix
         else:
             print('Error in inertia attribution. Need a 3x3 tensor.')
+    
+    def hVector(self, angDer):
+        '''
+        Gets the nonlinear angular acceleration forces
+
+        Parameters
+        ----------
+        angVelo : array of three doubles
+            caculated derivatie of the Cardan angles
+
+        Returns
+        -------
+        h : array of three doubles
+            inertial forces vector
+
+        '''
+        cdef double cosa = np.cos(angDer[0])
+        cdef double sina = np.sin(angDer[0])
+        cdef double cosb = np.cos(angDer[1])
+        cdef double sinb = np.sin(angDer[1])
+        
+        omega = np.zeros(3)
+        omega[0] = angDer[0] + sinb*angDer[2]
+        omega[1] = cosa*angDer[1] - sina*cosb*angDer[2]
+        omega[2] = sina*angDer[1] + cosa*cosb*angDer[2]
+        
+        omtil = hf.skew(omega)
+        I = np.array(self.inertiaTensor)
+        
+        return omtil.dot(I.dot(omega))
             
             
     def info(self):
@@ -211,9 +301,11 @@ cdef class flexibleBody(body):
     '''
     
     cdef int dimensionality
-    cdef list elementList
+    cdef public list elementList
     cdef object material
     cdef double[:] nodalElasticForces
+    cdef double[:,:] stiffnessMatrix, dampingMatrix
+    cdef bint nonLinear
     
     def __init__(self,name,material):
         '''
@@ -232,11 +324,12 @@ cdef class flexibleBody(body):
 
         '''
         
-        self.type = 'Flexible body'
         super().__init__(name)
+        self.type = 'Flexible body'
         self.material = material
         self.elementList = []
-        self.totalDof = 0   # total number of degrees of freedom       
+        self.totalDof = 0   # total number of degrees of freedom      
+        self.nonLinear = True
         
     @property 
     def mass(self):
@@ -245,6 +338,10 @@ cdef class flexibleBody(body):
             mass += e.mass
             
         return mass
+    
+    @property
+    def massMatrix(self):
+        return self.assembleMassMatrix()
     
     @property
     def material(self):
@@ -264,6 +361,44 @@ cdef class flexibleBody(body):
                 q[eleDof_view[i]] = qel[i]
         
         return np.array(q)
+    
+    @property
+    def u(self):
+        cdef double [:] u, uel
+        cdef Py_ssize_t [:] eleDof_view     #memory view of element's global dof
+        cdef Py_ssize_t i
+        u = np.zeros(self.totalDof, dtype=np.float64)
+        
+        for ele in self.elementList:
+            uel = ele.u
+            eleDof_view = ele.globalDof
+            for i in range(uel.shape[0]):
+                u[eleDof_view[i]] = uel[i]
+        
+        return np.array(u)
+    
+    
+    @property
+    def nonLinear(self):
+        return self.nonLinear
+    @nonLinear.setter
+    def nonLinear(self, str flag):
+        '''
+        Sets the nonlinear parameter
+
+        Parameters
+        ----------
+        str flag : string
+            Either 'NL' for nonlinear calculations or 'L' for linearized calculations.
+
+        Returns
+        -------
+        None.
+
+        '''
+        nl = {'NL':True,'L':False}
+        self.nonLinear = nl[flag]
+        
                 
     def assembleMassMatrix(self):
         print('Assemblying mass matrix')
@@ -284,32 +419,49 @@ cdef class flexibleBody(body):
         return M
     
     
-    def assembleElasticForceVector(self,int targetDof = -1):
+    def assembleElasticForceVector(self, bint veloc = False):
         
         Qe = np.zeros(self.totalDof)
-        cdef double[:] Qe_view = Qe 
+        cdef double[:] Qe_view = Qe
         cdef double[:] Qelem
-        
         cdef Py_ssize_t i, dof
         
-        for elem in self.elementList:
-            if elem.changedStates:
-                Qelem = elem.getNodalElasticForces()
+        
+        if self.nonLinear:
+            
+            
+            for elem in self.elementList:
+                if elem.changedStates:
+                    Qelem = elem.getNodalElasticForces(veloc)
+                else:
+                    #Qelem = elem.nodalElasticForces
+                    Qelem = elem.getNodalElasticForces(veloc)
+                for i,dof in enumerate(elem.globalDof):
+                    Qe_view[dof] += Qelem[i]
+                    
+        else:
+            if veloc:
+                # damping forces (needs to be scaled with damping factor)
+                Qe = np.array(self.stiffnessMatrix).dot(self.u)
             else:
-                #Qelem = elem.nodalElasticForces
-                Qelem = elem.getNodalElasticForces()
-            for i,dof in enumerate(elem.globalDof):
-                Qe_view[dof] += Qelem[i]
+                Qe = np.array(self.stiffnessMatrix).dot(self.q)
+                
             
         return Qe.reshape(-1,1)
     
+    def getSM(self):
+        return np.array(self.stiffnessMatrix)
+    def getq(self):
+        return np.array(self.q)
+    
     def assembleWeightVector(self, g=np.array([0,1])):
-        Qg = np.matlib.zeros(self.totalDof)
+        Qg = np.zeros(self.totalDof)
+        cdef double [:] Qg_view = Qg
         
         for elem in self.elementList:
             Qelem = elem.getWeightNodalForces(g).reshape(1,-1)
             for i,dof in enumerate(elem.globalDof):
-                Qg[0,dof] += Qelem[0,i]
+                Qg_view[dof] += Qelem[0,i]
             
         return Qg.reshape(1,-1)
     
@@ -318,22 +470,25 @@ cdef class flexibleBody(body):
     def assembleTangentStiffnessMatrix(self):
                          
         print('Assemblying tangent stiffness matrix')
-         
-        Kt = np.matlib.zeros([self.totalDof, self.totalDof])
+        
+        cdef double [:,:] ke
+        self.stiffnessMatrix = np.zeros((self.totalDof, self.totalDof))
         
         for elem in self.elementList:
             ke = elem.getTangentStiffnessMatrix()
             for i,dofi in enumerate(elem.globalDof):
                 for j,dofj in enumerate(elem.globalDof):
-                    Kt[dofi,dofj] += ke[i,j]
+                    self.stiffnessMatrix[dofi,dofj] += ke[i,j]
+                    
+        
             
         print('Tangent stiffness matrix assembly done!')
-        return Kt
+        return np.array(self.stiffnessMatrix)
         
     
     def addElement(self, element):
         '''
-        
+        Add a list of elements to the flexible body.
 
         Parameters
         ----------
@@ -345,32 +500,43 @@ cdef class flexibleBody(body):
         None.
 
         '''
-        # TODO adapt to 3D
-        curGdl = 0
+        cdef long curGdl = 0
+        cdef long nNumber = 0
+        cdef nodalDof
         for el in element:
             el.parentBody = self
             for nd in el.nodes:
                 nodalDof = len(nd.q)
                 nd.globalDof = list(range(curGdl,curGdl+nodalDof))
                 curGdl += nodalDof
+                nd.marker.name = 'Node_{}'.format(nNumber)
+                nNumber += 1
+            # we have to remove the influence of the last node, because it also belongs to the next element
             curGdl = el.globalDof[-1]-nodalDof + 1
+            nNumber -= 1
         self.elementList.extend(element)
         self.totalDof = el.globalDof[-1] + 1
         self.nodalElasticForces = np.zeros(self.totalDof)
         
+        # cleans up repeated nodes
+        self.markers = list( dict.fromkeys(self.markers))
+        
+        # initializes state vectors
+        self.q0 = np.zeros(self.totalDof)
+        self.u0 = np.zeros(self.totalDof)
         print('Added {0} elements to body ''{1:s}'''.format(len(element),self.name))
         
         
-    def plotPositions(self, int pointsPerElement = 5, bint show=False):
+    def plotPositions(self, int pointsPerElement = 5, bint show=False, eta = 0, zeta = 0):
         points = np.linspace(-1.,1.,pointsPerElement)
         
         xy = np.empty([0,self.dimensionality])
         
         for ele in self.elementList:
             for i in range(pointsPerElement-1):
-                xy = np.vstack([xy,ele.interpolatePosition(points[i],0,0)])
+                xy = np.vstack([xy,ele.interpolatePosition(points[i],eta,zeta)])
         #add last point
-        xy = np.vstack([xy,ele.interpolatePosition(points[-1],0,0)])
+        xy = np.vstack([xy,ele.interpolatePosition(points[-1],eta,zeta)])
                 
         if show:
             if self.dimensionality == 2:
@@ -417,6 +583,34 @@ com
                 for i in range(newq.shape[0]):
                     newq[i] = z[globDof_view[i]]
                 nd.q = newq
+            # finished cycling through nodes
+        
+    def updateVelocities(self, double [:] zd):
+        '''
+        Updates the velocities of the body nodes
+
+        Parameters
+        ----------
+        z : array like
+            New velocities of the nodes.
+
+        Returns
+        -------
+        None.
+        '''
+        
+        cdef Py_ssize_t i
+        cdef Py_ssize_t [:] globDof_view
+        cdef double[:] newu
+        
+        for ele in self.elementList:
+            # cycle through nodes
+            for nd in ele.nodes:
+                newu = nd.u
+                globDof_view = nd.globalDof
+                for i in range(newu.shape[0]):
+                    newu[i] = zd[globDof_view[i]]
+                nd.u = newu
             # finished cycling through nodes
             
 

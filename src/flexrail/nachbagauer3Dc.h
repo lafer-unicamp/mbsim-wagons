@@ -17,8 +17,11 @@ struct c_PyObj {
   PyObject_HEAD
   double q0[9];
   double q[9];
+  double u0[9];
+  double u[9];
   long globalDof[9];
-  double qdot[9];
+  PyObject *name;
+  PyObject *marker;
 };
 
 #ifndef __PYX_HAVE_API__nachbagauer3Dc

@@ -18,7 +18,7 @@ Created on Mon Nov 22 07:21:00 2021
 """
 
 import numpy as np
-
+from MultibodySystem import marker
 from numpy.matlib import matrix, eye
 from numpy import dot
 from numpy.linalg import norm, inv
@@ -33,8 +33,11 @@ cdef public class node[object c_PyObj, type c_PyObj_t]:
     
     cdef double [9] q0
     cdef double [9] q
+    cdef double [9] u0
+    cdef double [9] u
     cdef long [9] globalDof
-    cdef double [9] qdot
+    cdef public str name
+    cdef object marker
     """
     finite element node with nine dof
     
@@ -49,9 +52,12 @@ cdef public class node[object c_PyObj, type c_PyObj_t]:
        
     def __init__(self, listOfDof=[0.]*9):
                 
+        self.name = 'Node'
         self.q0 = np.array(listOfDof, dtype=np.float64)
         self.q = 0 * np.array(listOfDof, dtype=np.float64)
         self.globalDof = np.arange(9, dtype=np.int64)
+        self.marker = marker('_node', self.qtotal[:3], self.orientation)
+        self.marker.setParent(self)
         
             
     '''Class properties'''
@@ -77,14 +83,24 @@ cdef public class node[object c_PyObj, type c_PyObj_t]:
         self.q0 = dofMatrix
         
     @property
-    def qdot(self):
+    def u(self):
         '''
-        nodal initial positions
+        nodal velocities
         '''
-        return np.array(self.qdot, dtype=np.float64)
-    @qdot.setter
-    def qdot(self,uMatrix):
-        self.qdot = uMatrix
+        return np.array(self.u, dtype=np.float64)
+    @u.setter
+    def u(self,uMatrix):
+        self.u = uMatrix
+        
+    @property
+    def u0(self):
+        '''
+        nodal initial velocities
+        '''
+        return np.array(self.u0, dtype=np.float64)
+    @u0.setter
+    def u0(self,uMatrix):
+        self.u0 = uMatrix
         
     @property
     def globalDof(self):
@@ -100,6 +116,22 @@ cdef public class node[object c_PyObj, type c_PyObj_t]:
     def qtotal(self):
         '''Total nodal position'''
         return np.array(self.q) + np.array(self.q0)
+    
+    @property
+    def orientation(self):
+        cdef double [:] e2, e3
+        cdef Py_ssize_t i
+        
+        e2 = self.qtotal[3:6]
+        e3 = self.qtotal[6:9]
+        
+        e1 = np.cross(e2,e3)
+            
+        return np.vstack([e1,e2,e3]).transpose()
+    
+    @property 
+    def marker(self):
+        return self.marker
 
 
     
@@ -187,6 +219,15 @@ cdef class beamANCFelement3D(object):
             myq.extend(node.q)
             
         return np.array(myq, dtype=np.float64)
+    
+    @property
+    def u(self):
+        '''nodal velocities relative to global frame'''
+        myu = []
+        for node in self.nodes:
+            myu.extend(node.u)
+            
+        return np.array(myu, dtype=np.float64)
     
     @property
     def globalDof(self):
@@ -377,6 +418,14 @@ cdef class beamANCFelement3D(object):
         r = dot(self.shapeFunctionMatrix(xi_ ,eta_, zeta_), self.qtotal)
         
         return r
+    
+    
+    def interpolateVelocity(self,double xi_, double eta_, double zeta_):
+        """
+        Returns the interpolated velocity given the non-dimensional parameters
+        xi_, eta_, and zeta_ in [-1,1]
+        """
+        return self.shapeFunctionMatrix(xi_ ,eta_, zeta_).dot(self.u)
     
     
     
@@ -664,7 +713,7 @@ cdef class beamANCFelement3D(object):
     
     
    
-    def getNodalElasticForces(self,double [:] q = None):
+    def getNodalElasticForces(self,bint veloc = False):
         
         
         # beam geometry
@@ -674,7 +723,9 @@ cdef class beamANCFelement3D(object):
         
         # TODO correct changedStates calculation
    
-        if q == None:
+        if veloc:
+            q = self.u
+        else:
             q = self.qtotal
         
         # Gauss integration points
@@ -981,11 +1032,11 @@ cdef class beamANCF3Dquadratic(beamANCFelement3D):
                 dS_view[i,i+24] = s3*zeta
                 
                 # derivative wrt eta
-                dS_view[i+3,i+3] = xi_*(-1+xi_)/2
-                dS_view[i+3,i+12] = (1-xi_*xi_)
-                dS_view[i+3,i+21] = xi_*(1+xi_)/2
+                dS_view[i+3,i+3] = - xi_*(-1+xi_)/2
+                dS_view[i+3,i+12] = -(1-xi_*xi_)
+                dS_view[i+3,i+21] = - xi_*(1+xi_)/2
                 
-                # derivative wrt xeta
+                # derivative wrt zeta
                 dS_view[i+6,i+6] = dS_view[i+3,i+3]
                 dS_view[i+6,i+15] = dS_view[i+3,i+12]
                 dS_view[i+6,i+24] = dS_view[i+3,i+21]
@@ -1119,7 +1170,7 @@ cdef class railANCF3Dquadratic(beamANCF3Dquadratic):
             return self.headWidth
         
         
-    def getNodalElasticForces(self,double [:] q = None):
+    def getNodalElasticForces(self,bint veloc = False):
         '''
         Overrides base class method
 
@@ -1153,7 +1204,9 @@ cdef class railANCF3Dquadratic(beamANCF3Dquadratic):
         
         # TODO use composite quadrature rules to integrate over different sections
    
-        if q == None:
+        if veloc:
+            q = self.u
+        else:
             q = self.qtotal
         
         # Gauss integration points
@@ -1376,7 +1429,31 @@ cdef class railANCF3Dquadratic(beamANCF3Dquadratic):
         
         return dS
     
+    def getMassMatrix(self):
+        
+        # Gauss integration points
+        cdef list gauss = self.gaussIntegrationPoints[3]
+        cdef Py_ssize_t npoints = len(gauss)
+        
+        # Gauss weights
+        cdef list w = self.gaussWeights[3]
+        
+        cdef Py_ssize_t msize = len(self.q)
+        
+        M = np.zeros((msize,msize),dtype=np.float64)
     
+        cdef Py_ssize_t i,j, k
+        
+        for i in range(npoints):
+            for j in range(npoints):
+                for k in range(npoints):
+                    S = self.shapeFunctionMatrix(gauss[i],gauss[j],gauss[k])
+                    M += S.T.dot(S) * w[i] * w[j] * w[k]
+                
+        """we have to multiply by the dimensions because
+        calculations are carried out on non-dimensional coordinates [-1,1]
+        """        
+        return self.parentBody.material.rho * M * self.length * self.height * self.width / 8
     
     def getWeightNodalForces(self,grav=[0,-1.,0]):
         '''
@@ -1446,9 +1523,4 @@ if __name__ == '__main__':
     elemA[1].nodes[0].q[0] = 0.01e-3 * 0.50
     elemA[0].nodes[1].q[0] = 0.01e-3 * 0.25
 
-    F = rod.assembleElasticForceVector()
-
-
-    
-
-            
+    F = rod.assembleElasticForceVector()     
